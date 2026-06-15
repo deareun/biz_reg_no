@@ -479,6 +479,7 @@
       padding: 24px 16px;
     }
 
+
     @media (max-width: 768px) {
       .layout {
         flex-direction: column;
@@ -559,6 +560,10 @@
             <button id="searchBtn" type="button">조회</button>
           </div>
           <span id="status" class="status-text"></span>
+          <div style="margin-top: 12px; display: flex; align-items: center; gap: 8px;">
+            <input type="checkbox" id="performCategoryMapping" style="cursor: pointer;">
+            <label for="performCategoryMapping" style="margin: 0; font-size: 0.875rem; cursor: pointer; font-weight: 500;">업종매핑 동시 진행</label>
+          </div>
         </div>
 
         <div id="results"></div>
@@ -752,6 +757,29 @@
                 <input type="checkbox" class="field-tele" value="lctnRnOzip" checked>
                 <label>우편번호</label>
               </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Category Mapping Section -->
+        <div id="mappingFieldsSection" style="margin-bottom: 24px; padding-bottom: 24px; border-bottom: 1px solid var(--border);">
+          <label style="font-weight: 600; font-size: 0.875rem; display: block; margin-bottom: 12px;">업종매핑 결과</label>
+          <div class="checkbox-grid">
+            <div class="checkbox-item">
+              <input type="checkbox" class="field-mapping" value="mct_ry_cd" checked>
+              <label>가맹점업종코드</label>
+            </div>
+            <div class="checkbox-item">
+              <input type="checkbox" class="field-mapping" value="mct_ry_nm" checked>
+              <label>가맹점업종명</label>
+            </div>
+            <div class="checkbox-item">
+              <input type="checkbox" class="field-mapping" value="hpsn_mct_zcd" checked>
+              <label>초개인화업종코드</label>
+            </div>
+            <div class="checkbox-item">
+              <input type="checkbox" class="field-mapping" value="hpsn_mct_nm" checked>
+              <label>초개인화업종명</label>
             </div>
           </div>
         </div>
@@ -975,9 +1003,32 @@
         .map(([key, value]) => `<tr><th>${escapeHtml(key)}</th><td>${formatCellValue(value)}</td></tr>`)
         .join("");
 
-      const detailRows = Object.entries(crawl.detail || {})
-        .map(([key, value]) => `<tr><th>${escapeHtml(key)}</th><td>${formatCellValue(value)}</td></tr>`)
-        .join("");
+      const detailRows = (() => {
+        const rows = [];
+        const detail = crawl.detail || {};
+
+        // 국세청산업분류는 순서를 정렬해서 별도로 처리
+        const categoryOrder = ['대분류', '중분류', '소분류', '세분류', '세세분류'];
+        const industryCategory = detail['국세청산업분류'];
+
+        if (industryCategory && typeof industryCategory === 'object') {
+          categoryOrder.forEach(cat => {
+            const value = industryCategory[cat];
+            if (value && value !== '') {
+              rows.push(`<tr><th>국세청산업분류 - ${escapeHtml(cat)}</th><td>${escapeHtml(value)}</td></tr>`);
+            }
+          });
+        }
+
+        // 다른 필드들 처리
+        Object.entries(detail).forEach(([k, v]) => {
+          if (k !== '국세청산업분류') {
+            rows.push(`<tr><th>${escapeHtml(k)}</th><td>${formatCellValue(v)}</td></tr>`);
+          }
+        });
+
+        return rows.join("");
+      })();
 
       const detailBody = detailRows
         ? `<div class="sub-title">상세 페이지 (업종·통신판매업)</div><table class="kv-table">${detailRows}</table>`
@@ -994,15 +1045,16 @@
     }
 
     function formatDate(isoDate) {
+      if (!isoDate) return "-";
       const date = new Date(isoDate);
-      return date.toLocaleDateString("ko-KR", {
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-        hour: "2-digit",
-        minute: "2-digit"
-      });
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      const hour = String(date.getHours()).padStart(2, '0');
+      const minute = String(date.getMinutes()).padStart(2, '0');
+      return `${year}.${month}.${day} ${hour}:${minute}`;
     }
+
 
     function renderSummaryTable(results) {
       const rows = results.map((result, idx) => {
@@ -1259,6 +1311,11 @@
         return;
       }
       restoreDataPreferences();
+      const mappingFieldsSection = document.getElementById('mappingFieldsSection');
+      const performCategoryMapping = document.getElementById('performCategoryMapping').checked;
+      if (mappingFieldsSection) {
+        mappingFieldsSection.style.display = performCategoryMapping ? 'block' : 'none';
+      }
       document.getElementById('dataModal').style.display = 'flex';
     }
 
@@ -1278,9 +1335,10 @@
       const biznoFields = Array.from(document.querySelectorAll('.field-bizno:checked')).map(cb => cb.value);
       const teleFields = Array.from(document.querySelectorAll('.field-tele:checked')).map(cb => cb.value);
       const crawlFields = Array.from(document.querySelectorAll('.field-crawl:checked')).map(cb => cb.value);
+      const mappingFields = Array.from(document.querySelectorAll('.field-mapping:checked')).map(cb => cb.value);
       const excludeErrors = document.getElementById('excludeErrors').checked;
 
-      if (biznoFields.length === 0 && teleFields.length === 0 && crawlFields.length === 0) {
+      if (biznoFields.length === 0 && teleFields.length === 0 && crawlFields.length === 0 && mappingFields.length === 0) {
         alert('선택된 필드가 없습니다.');
         return;
       }
@@ -1309,7 +1367,8 @@
             data: dataToDownload,
             bizno_fields: biznoFields,
             tele_fields: teleFields,
-            crawl_fields: crawlFields
+            crawl_fields: crawlFields,
+            mapping_fields: mappingFields
           })
         });
 
@@ -1354,9 +1413,10 @@
       const biznoFields = Array.from(document.querySelectorAll('.field-bizno:checked')).map(cb => cb.value);
       const teleFields = Array.from(document.querySelectorAll('.field-tele:checked')).map(cb => cb.value);
       const crawlFields = Array.from(document.querySelectorAll('.field-crawl:checked')).map(cb => cb.value);
+      const mappingFields = Array.from(document.querySelectorAll('.field-mapping:checked')).map(cb => cb.value);
       const excludeErrors = document.getElementById('excludeErrors').checked;
 
-      if (biznoFields.length === 0 && teleFields.length === 0 && crawlFields.length === 0) {
+      if (biznoFields.length === 0 && teleFields.length === 0 && crawlFields.length === 0 && mappingFields.length === 0) {
         alert('선택된 필드가 없습니다.');
         return;
       }
@@ -1390,7 +1450,8 @@
               data: dataToSend,
               bizno_fields: biznoFields,
               tele_fields: teleFields,
-              crawl_fields: crawlFields
+              crawl_fields: crawlFields,
+              mapping_fields: mappingFields
             })
           });
 
@@ -1416,7 +1477,7 @@
       }
     }
 
-    searchBtn.addEventListener("click", async () => {
+searchBtn.addEventListener("click", async () => {
       const business_numbers = numbersEl.value.trim();
       if (!business_numbers) {
         statusEl.textContent = "사업자번호를 입력해 주세요.";
@@ -1438,7 +1499,9 @@
         const response = await fetch("/api/lookup", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ business_numbers }),
+          body: JSON.stringify({
+            business_numbers
+          }),
         });
 
         const data = await response.json();

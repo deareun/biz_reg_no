@@ -841,6 +841,15 @@
           </svg>
           조회이력
         </a>
+        <a href="/category-mapping" class="nav-item">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="7" height="7"></rect>
+            <rect x="14" y="3" width="7" height="7"></rect>
+            <rect x="14" y="14" width="7" height="7"></rect>
+            <rect x="3" y="14" width="7" height="7"></rect>
+          </svg>
+          업종매핑
+        </a>
       </nav>
     </aside>
 
@@ -1032,12 +1041,24 @@
                     <span class="sort-indicator" data-column="ftc_status"></span>
                   </span>
                 </th>
+                <th class="sortable-th" onclick="sortHistoryTable('mct_ry_cd_status', event)">
+                  <span class="sortable-header">
+                    가맹점업종기준
+                    <span class="sort-indicator" data-column="mct_ry_cd_status"></span>
+                  </span>
+                </th>
+                <th class="sortable-th" onclick="sortHistoryTable('hpsn_mct_zcd_status', event)">
+                  <span class="sortable-header">
+                    초개인화업종기준
+                    <span class="sort-indicator" data-column="hpsn_mct_zcd_status"></span>
+                  </span>
+                </th>
                 <th style="width: 80px;"></th>
               </tr>
             </thead>
             <tbody>
               <tr id="emptyMessage">
-                <td colspan="9" class="message">이력이 없습니다.</td>
+                <td colspan="11" class="message">이력이 없습니다.</td>
               </tr>
             </tbody>
           </table>
@@ -1236,6 +1257,29 @@
           </div>
         </div>
 
+        <!-- Category Mapping Section -->
+        <div style="margin-bottom: 24px; padding-bottom: 24px; border-bottom: 1px solid var(--border);">
+          <label style="font-weight: 600; font-size: 0.875rem; display: block; margin-bottom: 12px;">업종매핑 결과</label>
+          <div class="checkbox-grid">
+            <div class="checkbox-item">
+              <input type="checkbox" class="field-mapping" value="mct_ry_cd" checked>
+              <label>가맹점업종코드</label>
+            </div>
+            <div class="checkbox-item">
+              <input type="checkbox" class="field-mapping" value="mct_ry_nm" checked>
+              <label>가맹점업종명</label>
+            </div>
+            <div class="checkbox-item">
+              <input type="checkbox" class="field-mapping" value="hpsn_mct_zcd" checked>
+              <label>초개인화업종코드</label>
+            </div>
+            <div class="checkbox-item">
+              <input type="checkbox" class="field-mapping" value="hpsn_mct_nm" checked>
+              <label>초개인화업종명</label>
+            </div>
+          </div>
+        </div>
+
         <!-- Email Input Section (Bottom) -->
         <div style="margin-bottom: 24px; padding-bottom: 24px; border-bottom: 1px solid var(--border);">
           <label for="emailAddress" style="font-weight: 600; font-size: 0.875rem; display: block; margin-bottom: 12px;">📧 메일 수신 주소</label>
@@ -1260,6 +1304,27 @@
     let currentSortColumn = null;
     let currentSortAscending = true;
 
+    // 통신판매업 필드 한글 매핑
+    const TELECOM_FIELD_MAPPING = {
+      "bzmnNm": "사업자명",
+      "bzmnRgsSttusSeNm": "등록상태",
+      "lctnAddr": "지번주소",
+      "lctnRnAddr": "도로명주소",
+      "dclrDate": "신고일자",
+      "telno": "전화번호",
+      "domncn": "도메인",
+      "ntslMthdCn": "판매방식",
+      "ntslPrdlstCn": "판매물품",
+      "operSttusCdNm": "운영상태",
+      "corpYnNm": "법인여부",
+      "crno": "법인등록번호",
+      "ctpvNm": "시도명",
+      "rprsvEmladr": "대표이메일",
+      "prcsDeptNm": "처리부서명",
+      "prmmiYr": "허가개시년도",
+      "lctnRnOzip": "우편번호"
+    };
+
     function escapeHtml(value) {
       return String(value ?? "")
         .replace(/&/g, "&amp;")
@@ -1275,14 +1340,14 @@
     }
 
     function formatDate(isoDate) {
+      if (!isoDate) return "-";
       const date = new Date(isoDate);
-      return date.toLocaleDateString("ko-KR", {
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-        hour: "2-digit",
-        minute: "2-digit"
-      });
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      const hour = String(date.getHours()).padStart(2, '0');
+      const minute = String(date.getMinutes()).padStart(2, '0');
+      return `${year}.${month}.${day} ${hour}:${minute}`;
     }
 
     function formatCellValue(value) {
@@ -1304,6 +1369,21 @@
           .join("");
         return `<table class="kv-table"><tbody>${rows}</tbody></table>`;
       }).join("");
+    }
+
+    function formatIndustryCategory(categoryData) {
+      // 국세청산업분류 데이터를 "대분류 / 중분류 / 소분류 / 세분류 / 세세분류" 형식으로 표시
+      if (!categoryData || typeof categoryData !== 'object') return '';
+
+      const categories = [
+        categoryData['대분류'],
+        categoryData['중분류'],
+        categoryData['소분류'],
+        categoryData['세분류'],
+        categoryData['세세분류']
+      ];
+
+      return categories.filter(cat => cat && cat !== '').join(' / ');
     }
 
     function renderCrawlBlock(source, brno) {
@@ -1337,9 +1417,33 @@
           const searchRows = Object.entries(source.search || {})
             .map(([k, v]) => `<tr><th>${escapeHtml(k)}</th><td>${escapeHtml(v)}</td></tr>`)
             .join("");
-          const detailRows = Object.entries(source.detail || {})
-            .map(([k, v]) => `<tr><th>${escapeHtml(k)}</th><td>${formatCellValue(v)}</td></tr>`)
-            .join("");
+
+          const detailRows = (() => {
+            const rows = [];
+            const detail = source.detail || {};
+
+            // 국세청산업분류는 순서를 정렬해서 별도로 처리
+            const categoryOrder = ['대분류', '중분류', '소분류', '세분류', '세세분류'];
+            const industryCategory = detail['국세청산업분류'];
+
+            if (industryCategory && typeof industryCategory === 'object') {
+              categoryOrder.forEach(cat => {
+                const value = industryCategory[cat];
+                if (value && value !== '') {
+                  rows.push(`<tr><th>국세청산업분류 - ${escapeHtml(cat)}</th><td>${escapeHtml(value)}</td></tr>`);
+                }
+              });
+            }
+
+            // 다른 필드들 처리
+            Object.entries(detail).forEach(([k, v]) => {
+              if (k !== '국세청산업분류') {
+                rows.push(`<tr><th>${escapeHtml(k)}</th><td>${formatCellValue(v)}</td></tr>`);
+              }
+            });
+
+            return rows.join("");
+          })();
           body = (searchRows || detailRows)
             ? `<div class="sub-title">검색 결과</div><table class="kv-table"><tbody>${searchRows}</tbody></table>${detailRows ? `<div class="sub-title">상세 정보</div><table class="kv-table"><tbody>${detailRows}</tbody></table>` : ''}`
             : '<p class="message">정보 없음</p>';
@@ -1422,6 +1526,17 @@
         } else {
           body = '<p class="message">조회값 없음</p>';
         }
+      } else if (className === "gov" && source.items) {
+        // 통신판매업: 영문 필드명을 한글로 매핑
+        const mappedItems = source.items.map(item => {
+          const mappedItem = {};
+          Object.entries(item).forEach(([key, value]) => {
+            const korKey = TELECOM_FIELD_MAPPING[key] || key;
+            mappedItem[korKey] = value;
+          });
+          return mappedItem;
+        });
+        body = renderItems(mappedItems);
       } else {
         body = renderItems(source.items);
       }
@@ -1437,10 +1552,22 @@
       const api = record.api;
       const crawl = record.crawl;
       const ftc = record.ftc;
+      const mapping = record.mapping || {};
       const biznoResult = getStatusDot(api.bizno?.success, api.bizno?.found);
       const crawlResult = getStatusDot(crawl?.success, crawl?.found);
       const govResult = getStatusDot(api.gov?.success, api.gov?.found);
       const ftcResult = getStatusDot(ftc?.success, ftc?.found);
+
+      // 매핑 결과 렌더링 (null 체크 추가)
+      let mctDisplay = '없음';
+      if (mapping.mct_ry_cd && typeof mapping.mct_ry_cd === 'object' && mapping.mct_ry_cd.code) {
+        mctDisplay = `${mapping.mct_ry_cd.code} - ${mapping.mct_ry_cd.name}`;
+      }
+
+      let hpsn_mct_zcdDisplay = '없음';
+      if (mapping.hpsn_mct_zcd && typeof mapping.hpsn_mct_zcd === 'object' && mapping.hpsn_mct_zcd.code) {
+        hpsn_mct_zcdDisplay = `${mapping.hpsn_mct_zcd.code} - ${mapping.hpsn_mct_zcd.name}`;
+      }
 
       return `
         <tr data-id="${record.id || index}" class="history-row">
@@ -1454,6 +1581,8 @@
           <td>${crawlResult}</td>
           <td>${govResult}</td>
           <td>${ftcResult}</td>
+          <td>${mctDisplay}</td>
+          <td>${hpsn_mct_zcdDisplay}</td>
           <td style="text-align: center;">
             <div class="action-buttons">
               <button class="toggle-btn" data-index="${index}">▼</button>
@@ -1462,7 +1591,7 @@
           </td>
         </tr>
         <tr class="detail-row" data-index="${index}">
-          <td colspan="9" class="detail-cell">
+          <td colspan="11" class="detail-cell">
             <div class="detail-content">
               <div class="source-grid">
                 ${renderSourceBlock("Bizno API", api.bizno, "api", record.brno)}
@@ -1492,7 +1621,7 @@
 
         const tbody = historyTable.querySelector("tbody");
         if (allRecords.length === 0) {
-          tbody.innerHTML = '<tr id="emptyMessage"><td colspan="9" class="message">이력이 없습니다.</td></tr>';
+          tbody.innerHTML = '<tr id="emptyMessage"><td colspan="11" class="message">이력이 없습니다.</td></tr>';
           return;
         }
 
@@ -1565,7 +1694,7 @@
       // 정렬 수행
       let sortedRecords = [...allRecords];
 
-      if (['bizno_status', 'crawl_status', 'gov_status', 'ftc_status'].includes(columnName)) {
+      if (['bizno_status', 'crawl_status', 'gov_status', 'ftc_status', 'mct_ry_cd_status', 'hpsn_mct_zcd_status'].includes(columnName)) {
         // 상태 컬럼 정렬
         sortedRecords.sort((a, b) => {
           let statusA, statusB;
@@ -1582,6 +1711,13 @@
           } else if (columnName === 'ftc_status') {
             statusA = getStatusValueFromData(a.ftc?.success, a.ftc?.found);
             statusB = getStatusValueFromData(b.ftc?.success, b.ftc?.found);
+          } else if (columnName === 'mct_ry_cd_status') {
+            // 매핑 결과가 있으면 1, 없으면 0
+            statusA = a.mapping?.mct_ry_cd?.code ? 1 : 0;
+            statusB = b.mapping?.mct_ry_cd?.code ? 1 : 0;
+          } else if (columnName === 'hpsn_mct_zcd_status') {
+            statusA = a.mapping?.hpsn_mct_zcd?.code ? 1 : 0;
+            statusB = b.mapping?.hpsn_mct_zcd?.code ? 1 : 0;
           }
 
           return currentSortAscending ? statusA - statusB : statusB - statusA;
@@ -1613,7 +1749,7 @@
       // 테이블 다시 렌더링
       const tbody = historyTable.querySelector("tbody");
       if (allRecords.length === 0) {
-        tbody.innerHTML = '<tr id="emptyMessage"><td colspan="9" class="message">이력이 없습니다.</td></tr>';
+        tbody.innerHTML = '<tr id="emptyMessage"><td colspan="11" class="message">이력이 없습니다.</td></tr>';
         return;
       }
 
@@ -1679,6 +1815,8 @@
         const crawlStatusCell = cells[5].textContent.trim();
         const govStatusCell = cells[6].textContent.trim();
         const ftcStatusCell = cells[7].textContent.trim();
+        const mctCell = cells[8].textContent.trim().toLowerCase();
+        const hpsn_mct_zcdCell = cells[9].textContent.trim().toLowerCase();
 
         // 날짜 파싱 (예: "2025. 6. 15. 오후 2:30")
         const dateMatch = dateStr.match(/(\d{4})\.\s+(\d{1,2})\.\s+(\d{1,2})/);
@@ -1954,9 +2092,10 @@
       const biznoFields = Array.from(document.querySelectorAll('.field-bizno:checked')).map(cb => cb.value);
       const teleFields = Array.from(document.querySelectorAll('.field-tele:checked')).map(cb => cb.value);
       const crawlFields = Array.from(document.querySelectorAll('.field-crawl:checked')).map(cb => cb.value);
+      const mappingFields = Array.from(document.querySelectorAll('.field-mapping:checked')).map(cb => cb.value);
       const excludeErrors = document.getElementById('excludeErrors').checked;
 
-      if (biznoFields.length === 0 && teleFields.length === 0 && crawlFields.length === 0) {
+      if (biznoFields.length === 0 && teleFields.length === 0 && crawlFields.length === 0 && mappingFields.length === 0) {
         alert('선택된 필드가 없습니다.');
         return;
       }
@@ -1985,7 +2124,8 @@
             data: dataToDownload,
             bizno_fields: biznoFields,
             tele_fields: teleFields,
-            crawl_fields: crawlFields
+            crawl_fields: crawlFields,
+            mapping_fields: mappingFields
           })
         });
 
@@ -2030,9 +2170,10 @@
       const biznoFields = Array.from(document.querySelectorAll('.field-bizno:checked')).map(cb => cb.value);
       const teleFields = Array.from(document.querySelectorAll('.field-tele:checked')).map(cb => cb.value);
       const crawlFields = Array.from(document.querySelectorAll('.field-crawl:checked')).map(cb => cb.value);
+      const mappingFields = Array.from(document.querySelectorAll('.field-mapping:checked')).map(cb => cb.value);
       const excludeErrors = document.getElementById('excludeErrors').checked;
 
-      if (biznoFields.length === 0 && teleFields.length === 0 && crawlFields.length === 0) {
+      if (biznoFields.length === 0 && teleFields.length === 0 && crawlFields.length === 0 && mappingFields.length === 0) {
         alert('선택된 필드가 없습니다.');
         return;
       }
@@ -2066,7 +2207,8 @@
               data: dataToSend,
               bizno_fields: biznoFields,
               tele_fields: teleFields,
-              crawl_fields: crawlFields
+              crawl_fields: crawlFields,
+              mapping_fields: mappingFields
             })
           });
 

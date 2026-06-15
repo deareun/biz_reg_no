@@ -28,10 +28,33 @@ db.init_app(app)
 with app.app_context():
     db.create_all()
 
+    # 새로운 컬럼 추가 (마이그레이션)
+    try:
+        import sqlalchemy as sa
+        inspector = sa.inspect(db.engine)
+        columns = [col['name'] for col in inspector.get_columns('query_history')]
+
+        if 'mct_ry_cd_result' not in columns:
+            with db.engine.begin() as conn:
+                conn.execute(sa.text(
+                    "ALTER TABLE query_history ADD COLUMN mct_ry_cd_result JSON"
+                ))
+
+        if 'hpsn_mct_zcd_result' not in columns:
+            with db.engine.begin() as conn:
+                conn.execute(sa.text(
+                    "ALTER TABLE query_history ADD COLUMN hpsn_mct_zcd_result JSON"
+                ))
+    except Exception as e:
+        # 이미 존재하거나 다른 DB에서는 실패할 수 있으므로 무시
+        pass
+
 BIZNO_API_KEY = os.getenv("bizno_API_Key", "")
 GOV_API_KEY_ENCODED = os.getenv("gov_API_key_encoded", "")
 GOV_API_KEY_DECODED = os.getenv("gov_API_key_decoded", "")
 FTC_API_KEY = os.getenv("ftc_API_key", "")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3-flash-preview")
 
 BIZNO_URL = "https://bizno.net/api/fapi"
 GOV_URL = "https://apis.data.go.kr/1130000/MllBsDtl_3Service/getMllBsInfoDetail_3"
@@ -64,6 +87,26 @@ GOV_FIELD_LABELS = {
     "mnfctNm": "제조명",
 }
 
+TELECOM_FIELD_MAPPING = {
+    "bzmnNm": "사업자명",
+    "bzmnRgsSttusSeNm": "등록상태",
+    "lctnAddr": "지번주소",
+    "lctnRnAddr": "도로명주소",
+    "dclrDate": "신고일자",
+    "telno": "전화번호",
+    "domncn": "도메인",
+    "ntslMthdCn": "판매방식",
+    "ntslPrdlstCn": "판매물품",
+    "operSttusCdNm": "운영상태",
+    "corpYnNm": "법인여부",
+    "crno": "법인등록번호",
+    "ctpvNm": "시도명",
+    "rprsvEmladr": "대표이메일",
+    "prcsDeptNm": "처리부서명",
+    "prmmiYr": "허가개시년도",
+    "lctnRnOzip": "우편번호",
+}
+
 
 def parse_business_numbers(raw: str) -> list[str]:
     parts = re.split(r"[\s,;]+", raw.strip())
@@ -79,6 +122,94 @@ def parse_business_numbers(raw: str) -> list[str]:
 
 def format_business_number(digits: str) -> str:
     return f"{digits[:3]}-{digits[3:5]}-{digits[5:]}"
+
+
+def format_date(date_str: str) -> str:
+    """ISO 형식 또는 기타 형식의 날짜를 yyyy.mm.dd 형식으로 변환"""
+    if not date_str:
+        return ""
+
+    # 이미 yyyy.mm.dd 형식이면 반환
+    if isinstance(date_str, str) and len(date_str) == 10 and date_str[4] == '.' and date_str[7] == '.':
+        return date_str
+
+    try:
+        # ISO 형식 (YYYY-MM-DD 또는 YYYY-MM-DDTHH:MM:SS)
+        if isinstance(date_str, str):
+            date_str = date_str.split('T')[0]  # T 이후 제거
+            if '-' in date_str:
+                parts = date_str.split('-')
+                if len(parts) == 3:
+                    return f"{parts[0]}.{parts[1]}.{parts[2]}"
+            # YYYYMMDD 형식
+            elif len(date_str) >= 8 and date_str[:8].isdigit():
+                return f"{date_str[:4]}.{date_str[4:6]}.{date_str[6:8]}"
+        return str(date_str)
+    except Exception:
+        return str(date_str) if date_str else ""
+
+
+def load_categories():
+    """category.txt에서 업종코드 로드"""
+    categories = {
+        'mct_ry_cd': {},  # 가맹점원장 기준 - {코드: 업종명}
+        'hpsn_mct_zcd': {}        # 초개인화 기준 - {코드: 업종명}
+    }
+
+    try:
+        category_path = os.path.join(os.path.dirname(__file__), 'category.txt')
+        if not os.path.exists(category_path):
+            print(f"category.txt를 찾을 수 없습니다: {category_path}")
+            return categories
+
+        with open(category_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+
+        # MCT_RY_CD 섹션과 HPSN 섹션 분리 ('--- ' 기준)
+        sections = content.split('--- ')
+
+        if len(sections) >= 2:
+            # MCT_RY_CD 섹션 (가맹점원장 기준)
+            mct_section = sections[1].strip().split('\n')
+            for line in mct_section[1:]:  # 첫 줄(헤더) 제외
+                line = line.strip()
+                if not line or line.startswith('MCT_RY_CD'):
+                    continue
+                # CSV 형식: 첫 번째 값은 코드, 두 번째 값은 업종명
+                parts = line.split(',')
+                if len(parts) >= 2:
+                    code = parts[0].strip()
+                    name = parts[1].strip()
+                    # '기타' 업종 제외
+                    if '기타' not in name and code and code[0].isdigit():
+                        categories['mct_ry_cd'][code] = name
+
+            # HPSN 섹션 (초개인화 기준)
+            if len(sections) >= 3:
+                hpsn_mct_zcd_section = sections[2].strip().split('\n')
+                for line in hpsn_mct_zcd_section:
+                    line = line.strip()
+                    if not line or line.startswith('HPSN_') or line.startswith('초개인화'):
+                        continue
+                    # CSV 형식: 첫 번째 값은 코드, 여덟 번째 값은 업종명
+                    parts = line.split(',')
+                    if len(parts) >= 8:
+                        code = parts[0].strip()
+                        name = parts[7].strip()
+                        # '기타' 업종 제외
+                        if '기타' not in name and code and code[0].isalpha():
+                            categories['hpsn_mct_zcd'][code] = name
+
+            print(f"카테고리 로딩 완료: MCT_RY_CD {len(categories['mct_ry_cd'])}개, HPSN {len(categories['hpsn_mct_zcd'])}개")
+
+    except Exception as e:
+        print(f"카테고리 로딩 실패: {e}")
+
+    return categories
+
+
+# 카테고리 로드 (전역 변수)
+CATEGORIES = load_categories()
 
 
 def query_bizno(brno: str) -> dict:
@@ -299,6 +430,8 @@ def extract_company_name(bizno_result, crawl_result, gov_result) -> str:
     return ""
 
 
+
+
 def lookup_one(brno: str) -> dict:
     from datetime import datetime
 
@@ -309,6 +442,7 @@ def lookup_one(brno: str) -> dict:
             record_dict = recent_record.to_dict()
             record_dict["is_cached"] = True
             return record_dict
+
     except Exception as e:
         print(f"DB 조회 실패 (캐시): {e}")
 
@@ -363,6 +497,8 @@ def index():
 @app.route("/history")
 def history():
     return render_template("history.html")
+
+
 
 
 @app.get("/api/history")
@@ -457,7 +593,18 @@ def lookup():
             results.append(future.result())
 
     results.sort(key=lambda item: numbers.index(item["brno"]))
+
     return jsonify({"success": True, "count": len(results), "results": results})
+
+
+@app.get("/api/categories")
+def get_categories():
+    """업종 카테고리 데이터 조회"""
+    return jsonify({
+        "success": True,
+        "mct_ry_cd": CATEGORIES.get('mct_ry_cd', {}),
+        "hpsn_mct_zcd": CATEGORIES.get('hpsn_mct_zcd', {})
+    })
 
 
 @app.get("/api/ftc/search")
@@ -517,6 +664,8 @@ def ftc_search():
     }), 200
 
 
+
+
 @app.post("/api/send-email")
 def send_email():
     """조회 결과를 CSV로 생성하여 이메일 발송"""
@@ -526,6 +675,7 @@ def send_email():
     bizno_fields = payload.get("bizno_fields", [])
     tele_fields = payload.get("tele_fields", [])
     crawl_fields = payload.get("crawl_fields", [])
+    mapping_fields = payload.get("mapping_fields", [])
 
     if not email_address:
         return jsonify({"success": False, "error": "메일 주소가 필요합니다."}), 400
@@ -545,6 +695,8 @@ def send_email():
             columns.extend([f"crawl_{field}" for field in crawl_fields])
         if tele_fields:
             columns.extend([f"tele_{field}" for field in tele_fields])
+        if mapping_fields:
+            columns.extend([f"mapping_{field}" for field in mapping_fields])
 
         writer = csv.DictWriter(csv_buffer, fieldnames=columns)
         writer.writeheader()
@@ -594,6 +746,19 @@ def send_email():
                     gov_data = gov_items[0]
                     for field in tele_fields:
                         row[f"tele_{field}"] = gov_data.get(field, "")
+
+            # 업종매핑 데이터
+            if mapping_fields and item.get("mapping"):
+                mapping_data = item["mapping"]
+                for field in mapping_fields:
+                    if field == "mct_ry_cd" and mapping_data.get("mct_ry_cd"):
+                        row[f"mapping_mct_ry_cd"] = mapping_data["mct_ry_cd"].get("code", "")
+                    elif field == "mct_ry_nm" and mapping_data.get("mct_ry_cd"):
+                        row[f"mapping_mct_ry_nm"] = mapping_data["mct_ry_cd"].get("name", "")
+                    elif field == "hpsn_mct_zcd" and mapping_data.get("hpsn_mct_zcd"):
+                        row[f"mapping_hpsn_mct_zcd"] = mapping_data["hpsn_mct_zcd"].get("code", "")
+                    elif field == "hpsn_mct_nm" and mapping_data.get("hpsn_mct_zcd"):
+                        row[f"mapping_hpsn_mct_nm"] = mapping_data["hpsn_mct_zcd"].get("name", "")
 
             writer.writerow(row)
 
@@ -647,6 +812,7 @@ def generate_csv():
     bizno_fields = payload.get("bizno_fields", [])
     tele_fields = payload.get("tele_fields", [])
     crawl_fields = payload.get("crawl_fields", [])
+    mapping_fields = payload.get("mapping_fields", [])
 
     if not data:
         return jsonify({"success": False, "error": "조회 데이터가 필요합니다."}), 400
@@ -661,6 +827,8 @@ def generate_csv():
             columns.extend([f"crawl_{field}" for field in crawl_fields])
         if tele_fields:
             columns.extend([f"tele_{field}" for field in tele_fields])
+        if mapping_fields:
+            columns.extend([f"mapping_{field}" for field in mapping_fields])
 
         writer = csv.DictWriter(csv_buffer, fieldnames=columns)
         writer.writeheader()
@@ -701,6 +869,18 @@ def generate_csv():
                     gov_data = gov_items[0]
                     for field in tele_fields:
                         row[f"tele_{field}"] = gov_data.get(field, "")
+
+            if mapping_fields and item.get("mapping"):
+                mapping_data = item["mapping"]
+                for field in mapping_fields:
+                    if field == "mct_ry_cd" and mapping_data.get("mct_ry_cd"):
+                        row[f"mapping_mct_ry_cd"] = mapping_data["mct_ry_cd"].get("code", "")
+                    elif field == "mct_ry_nm" and mapping_data.get("mct_ry_cd"):
+                        row[f"mapping_mct_ry_nm"] = mapping_data["mct_ry_cd"].get("name", "")
+                    elif field == "hpsn_mct_zcd" and mapping_data.get("hpsn_mct_zcd"):
+                        row[f"mapping_hpsn_mct_zcd"] = mapping_data["hpsn_mct_zcd"].get("code", "")
+                    elif field == "hpsn_mct_nm" and mapping_data.get("hpsn_mct_zcd"):
+                        row[f"mapping_hpsn_mct_nm"] = mapping_data["hpsn_mct_zcd"].get("name", "")
 
             writer.writerow(row)
 

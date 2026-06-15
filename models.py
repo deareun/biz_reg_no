@@ -20,8 +20,20 @@ class QueryHistory(db.Model):
     crawl_result = db.Column(db.JSON, nullable=True)
     ftc_result = db.Column(db.JSON, nullable=True)
 
+    # LLM 매핑 결과 (JSON)
+    mct_ry_cd_result = db.Column(db.JSON, nullable=True)
+    hpsn_mct_zcd_result = db.Column(db.JSON, nullable=True)
+
     def to_dict(self):
-        return {
+        # 매핑 결과가 있으면만 mapping 필드 포함
+        mapping_data = None
+        if self.mct_ry_cd_result is not None or self.hpsn_mct_zcd_result is not None:
+            mapping_data = {
+                'mct_ry_cd': self.mct_ry_cd_result,
+                'hpsn_mct_zcd': self.hpsn_mct_zcd_result,
+            }
+
+        result = {
             'id': self.id,
             'brno': self.brno,
             'brno_formatted': self.brno_formatted,
@@ -34,6 +46,11 @@ class QueryHistory(db.Model):
             'crawl': self.crawl_result,
             'ftc': self.ftc_result,
         }
+
+        if mapping_data:
+            result['mapping'] = mapping_data
+
+        return result
 
     @staticmethod
     def get_recent_by_brno(brno, days=90):
