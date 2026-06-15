@@ -1,0 +1,1464 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>🏢사업자번호 일괄 조회</title>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --background: #ffffff;
+      --foreground: #1a1a24;
+      --card: #ffffff;
+      --primary: oklch(0.457 0.24 277.023);
+      --primary-foreground: #f5f3ff;
+      --muted: #f5f5f4;
+      --muted-foreground: #8b8b94;
+      --border: #ebe9f1;
+      --input: #ebe9f1;
+      --ring: oklch(0.714 0.014 41.2);
+      --destructive: #dc2626;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans KR", sans-serif;
+      background: var(--background);
+      color: var(--foreground);
+      line-height: 1.5;
+      font-size: 85%;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .layout {
+      display: flex;
+      height: 100vh;
+    }
+
+    /* Sidebar */
+    .sidebar {
+      width: 240px;
+      background: var(--card);
+      border-right: 1px solid var(--border);
+      padding: 16px;
+      overflow-y: auto;
+    }
+
+    .sidebar-logo {
+      font-size: 1.25rem;
+      font-weight: 700;
+      margin-bottom: 24px;
+      color: var(--primary);
+    }
+
+    .sidebar-nav {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 12px;
+      border-radius: 6px;
+      text-decoration: none;
+      color: var(--foreground);
+      font-size: 0.875rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.2s;
+      border: 1px solid transparent;
+    }
+
+    .nav-item:hover {
+      background: var(--muted);
+    }
+
+    .nav-item.active {
+      background: var(--primary-foreground);
+      color: var(--primary);
+      border-color: var(--primary);
+    }
+
+    /* Main Content */
+    .main-content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 16px;
+      border-bottom: 1px solid var(--border);
+      background: var(--card);
+    }
+
+    .header h1 {
+      margin: 0;
+      font-size: 1.5rem;
+      font-weight: 700;
+    }
+
+    .content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px;
+    }
+
+    .subtitle {
+      color: var(--muted-foreground);
+      margin: 0 0 16px;
+      font-size: 0.875rem;
+    }
+
+    .panel {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+
+    .form-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+      flex-wrap: wrap;
+    }
+
+    label {
+      font-weight: 500;
+      font-size: 0.875rem;
+      color: var(--foreground);
+    }
+
+    .hint-inline {
+      font-weight: 400;
+      color: var(--muted-foreground);
+      font-size: 0.8125rem;
+    }
+
+    .input-group {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 6px;
+    }
+
+    textarea {
+      flex: 1;
+      min-height: 96px;
+      padding: 8px 12px;
+      border: 1px solid var(--input);
+      border-radius: 6px;
+      font-size: 0.875rem;
+      resize: vertical;
+      font-family: inherit;
+      background: var(--card);
+      color: var(--foreground);
+    }
+
+    textarea:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px var(--ring);
+    }
+
+    .status-text {
+      display: block;
+      margin-top: 6px;
+      font-size: 0.8125rem;
+      color: var(--muted-foreground);
+    }
+
+    .status-text.loading {
+      animation: pulse 1.5s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.6; }
+    }
+
+    button {
+      background: var(--primary);
+      color: var(--primary-foreground);
+      border: none;
+      border-radius: 6px;
+      padding: 8px 16px;
+      font-size: 0.875rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background-color 0.2s;
+      white-space: nowrap;
+    }
+
+    button:hover:not(:disabled) {
+      background: oklch(0.398 0.195 277.366);
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    /* Modal */
+    .modal {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+
+    .modal-content {
+      background: var(--card);
+      border-radius: 10px;
+      padding: 24px;
+      max-width: 600px;
+      width: 90%;
+      max-height: 85vh;
+      overflow-y: auto;
+      box-shadow: 0 20px 25px rgba(0, 0, 0, 0.15);
+    }
+
+    .modal-header {
+      font-size: 1.125rem;
+      font-weight: 700;
+      margin-bottom: 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .modal-close {
+      background: none;
+      border: none;
+      font-size: 1.5rem;
+      cursor: pointer;
+      padding: 0;
+      width: 32px;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .modal-body {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .form-group label {
+      font-weight: 600;
+      font-size: 0.875rem;
+    }
+
+    .form-group input {
+      padding: 8px 12px;
+      border: 1px solid var(--input);
+      border-radius: 6px;
+      font-size: 0.875rem;
+      background: var(--card);
+      color: var(--foreground);
+    }
+
+    .form-group input:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px var(--ring);
+    }
+
+    .checkbox-group {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .checkbox-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 8px;
+    }
+
+    .checkbox-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .checkbox-item input[type="checkbox"] {
+      cursor: pointer;
+      margin: 0;
+    }
+
+    .checkbox-item label {
+      cursor: pointer;
+      margin: 0;
+      font-weight: 400;
+      font-size: 0.8rem;
+    }
+
+    .modal-footer {
+      display: flex;
+      gap: 8px;
+      justify-content: flex-end;
+    }
+
+    .summary-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.875rem;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+
+    .summary-table thead {
+      background: var(--muted);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .summary-table th {
+      padding: 6px 10px;
+      text-align: left;
+      font-weight: 600;
+      color: var(--muted-foreground);
+      font-size: 0.8125rem;
+    }
+
+    .sortable-header {
+      cursor: pointer;
+      user-select: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      white-space: nowrap;
+    }
+
+    .sortable-header:hover {
+      color: var(--primary);
+    }
+
+    .sort-indicator {
+      font-size: 0.75rem;
+      opacity: 0.6;
+      min-width: 12px;
+      text-align: center;
+    }
+
+    .sort-indicator.active {
+      opacity: 1;
+      color: var(--primary);
+    }
+
+    .summary-table td {
+      padding: 6px 10px;
+      border-bottom: 1px solid var(--border);
+      color: var(--foreground);
+      height: 32px;
+    }
+
+    .summary-table tbody tr:hover {
+      background: var(--muted);
+    }
+
+    .source-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      grid-template-rows: auto 1fr;
+      gap: 8px;
+      min-height: 300px;
+    }
+
+    .source-grid .source-block:nth-child(1) {
+      grid-column: 1;
+      grid-row: 1;
+    }
+
+    .source-grid .source-block:nth-child(2) {
+      grid-column: 2;
+      grid-row: 1 / 3;
+    }
+
+    .source-grid .source-block:nth-child(3) {
+      grid-column: 1;
+      grid-row: 2;
+    }
+
+    .source-grid .source-block:nth-child(4) {
+      grid-column: 3;
+      grid-row: 1 / 3;
+    }
+
+    .source-block {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px;
+    }
+
+    .source-heading {
+      font-weight: 600;
+      font-size: 0.8125rem;
+      margin-bottom: 6px;
+      color: var(--primary);
+    }
+
+    .kv-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.8rem;
+    }
+
+    .kv-table th,
+    .kv-table td {
+      text-align: left;
+      padding: 3px 6px;
+      border-bottom: 1px solid var(--border);
+      height: 24px;
+    }
+
+    .kv-table th {
+      width: 35%;
+      color: var(--muted-foreground);
+      font-weight: 500;
+      background: var(--muted);
+      font-size: 0.75rem;
+    }
+
+    .kv-table td {
+      color: var(--foreground);
+      word-break: break-word;
+      font-size: 0.8rem;
+    }
+
+    .detail-row {
+      display: none;
+    }
+
+    .detail-row.open {
+      display: table-row;
+    }
+
+    .detail-cell {
+      padding: 0 !important;
+      border-bottom: none !important;
+    }
+
+    .detail-content {
+      padding: 12px;
+      background: var(--muted);
+      border-top: 1px solid var(--border);
+    }
+
+    .empty {
+      text-align: center;
+      color: var(--muted-foreground);
+      padding: 24px 16px;
+    }
+
+    @media (max-width: 768px) {
+      .layout {
+        flex-direction: column;
+      }
+
+      .sidebar {
+        width: 100%;
+        border-right: none;
+        border-bottom: 1px solid var(--border);
+        padding: 8px;
+      }
+
+      .sidebar-nav {
+        flex-direction: row;
+        gap: 4px;
+      }
+
+      .nav-item {
+        flex: 1;
+        padding: 8px;
+        font-size: 0.75rem;
+      }
+
+      .source-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .source-grid .source-block {
+        grid-column: 1 !important;
+        grid-row: auto !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-logo">🏢 사업자번호 조회시스템</div>
+      <nav class="sidebar-nav">
+        <a href="/" class="nav-item active">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="8"></circle>
+            <path d="m21 21-4.35-4.35"></path>
+          </svg>
+          조회하기
+        </a>
+        <a href="/history" class="nav-item">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"></circle>
+            <polyline points="12 6 12 12 16 14"></polyline>
+          </svg>
+          조회이력
+        </a>
+      </nav>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <div class="header">
+        <div>
+          <h1>조회하기</h1>
+          <p class="subtitle">Biz No · 통신판매사업자 · 가맹사업자 조회 결과를 제공합니다.</p>
+        </div>
+        <button onclick="openDataModal()" style="height: fit-content;">📥 자료받기</button>
+      </div>
+
+      <div class="content">
+        <div class="panel">
+          <div class="form-header">
+            <label for="numbers">사업자등록번호</label>
+            <span class="hint-inline">(최대 100개) · 줄바꿈 / 쉼표 / 공백으로 구분, 하이픈 포함 가능 / Bizno API 는 일일 200건 제한</span>
+          </div>
+          <div class="input-group">
+            <textarea id="numbers" placeholder="3988701116
+1448118454
+1111111111, 2222222222"></textarea>
+            <button id="searchBtn" type="button">조회</button>
+          </div>
+          <span id="status" class="status-text"></span>
+        </div>
+
+        <div id="results"></div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Data Modal -->
+  <div id="dataModal" class="modal" style="display: none;">
+    <div class="modal-content">
+      <div class="modal-header">
+        <span>조회 결과 받기</span>
+        <button class="modal-close" onclick="closeDataModal()">✕</button>
+      </div>
+
+      <div class="modal-body">
+        <!-- Exclude Errors Checkbox (Top) -->
+        <div style="margin-bottom: 24px; padding-bottom: 24px; border-bottom: 1px solid var(--border);">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <input type="checkbox" id="excludeErrors" style="cursor: pointer;">
+            <label for="excludeErrors" style="margin: 0; font-size: 0.875rem; cursor: pointer; font-weight: 500;">오류건 제외</label>
+          </div>
+        </div>
+
+        <!-- Field Selection Section -->
+        <div style="margin-bottom: 24px; padding-bottom: 24px; border-bottom: 1px solid var(--border);">
+          <label style="font-weight: 600; font-size: 0.875rem; display: block; margin-bottom: 12px;">조회 데이터 선택</label>
+
+          <div style="margin-bottom: 16px;">
+            <div style="font-weight: 500; font-size: 0.8rem; display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+              <span>Bizno API</span>
+              <label style="font-weight: 400; font-size: 0.75rem;">
+                <input type="checkbox" id="bizno_all" onchange="toggleAllCheckboxes('bizno')">
+                전체 선택
+              </label>
+            </div>
+            <div class="checkbox-grid">
+              <div class="checkbox-item">
+                <input type="checkbox" class="field-bizno" value="상호명" checked>
+                <label>상호명</label>
+              </div>
+              <div class="checkbox-item">
+                <input type="checkbox" class="field-bizno" value="사업자등록번호" checked>
+                <label>사업자등록번호</label>
+              </div>
+              <div class="checkbox-item">
+                <input type="checkbox" class="field-bizno" value="사업자상태" checked>
+                <label>사업자상태</label>
+              </div>
+              <div class="checkbox-item">
+                <input type="checkbox" class="field-bizno" value="사업장명" checked>
+                <label>사업장명</label>
+              </div>
+              <div class="checkbox-item">
+                <input type="checkbox" class="field-bizno" value="대표자명" checked>
+                <label>대표자명</label>
+              </div>
+              <div class="checkbox-item">
+                <input type="checkbox" class="field-bizno" value="사업장주소" checked>
+                <label>사업장주소</label>
+              </div>
+            </div>
+          </div>
+
+          <div style="margin-bottom: 16px;">
+            <div style="font-weight: 500; font-size: 0.8rem; display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+              <span>Bizno 크롤링</span>
+              <label style="font-weight: 400; font-size: 0.75rem;">
+                <input type="checkbox" id="crawl_all" onchange="toggleAllCheckboxes('crawl')">
+                전체 선택
+              </label>
+            </div>
+            <div class="checkbox-grid">
+              <div class="checkbox-item">
+                <input type="checkbox" class="field-crawl" value="상호명" checked>
+                <label>상호명</label>
+              </div>
+              <div class="checkbox-item">
+                <input type="checkbox" class="field-crawl" value="주소" checked>
+                <label>주소</label>
+              </div>
+              <div class="checkbox-item">
+                <input type="checkbox" class="field-crawl" value="사업자상태" checked>
+                <label>사업자상태</label>
+              </div>
+              <div class="checkbox-item">
+                <input type="checkbox" class="field-crawl" value="업태" checked>
+                <label>업태</label>
+              </div>
+              <div class="checkbox-item">
+                <input type="checkbox" class="field-crawl" value="종목" checked>
+                <label>종목</label>
+              </div>
+              <div class="checkbox-item">
+                <input type="checkbox" class="field-crawl" value="국세청산업분류_대분류" checked>
+                <label>산업분류(대)</label>
+              </div>
+              <div class="checkbox-item">
+                <input type="checkbox" class="field-crawl" value="국세청산업분류_중분류" checked>
+                <label>산업분류(중)</label>
+              </div>
+              <div class="checkbox-item">
+                <input type="checkbox" class="field-crawl" value="국세청산업분류_소분류" checked>
+                <label>산업분류(소)</label>
+              </div>
+              <div class="checkbox-item">
+                <input type="checkbox" class="field-crawl" value="국세청산업분류_세분류" checked>
+                <label>산업분류(세)</label>
+              </div>
+              <div class="checkbox-item">
+                <input type="checkbox" class="field-crawl" value="국세청산업분류_세세분류" checked>
+                <label>산업분류(세세)</label>
+              </div>
+            </div>
+          </div>
+
+          <div style="margin-bottom: 16px;">
+            <div style="font-weight: 500; font-size: 0.8rem; display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+              <span>통신판매업 API</span>
+              <label style="font-weight: 400; font-size: 0.75rem;">
+                <input type="checkbox" id="tele_all" onchange="toggleAllCheckboxes('tele')">
+                전체 선택
+              </label>
+            </div>
+            <div class="checkbox-grid">
+              <div class="checkbox-item">
+                <input type="checkbox" class="field-tele" value="bzmnNm" checked>
+                <label>사업자명</label>
+              </div>
+              <div class="checkbox-item">
+                <input type="checkbox" class="field-tele" value="bzmnRgsSttusSeNm" checked>
+                <label>등록상태</label>
+              </div>
+              <div class="checkbox-item">
+                <input type="checkbox" class="field-tele" value="lctnAddr" checked>
+                <label>지번주소</label>
+              </div>
+              <div class="checkbox-item">
+                <input type="checkbox" class="field-tele" value="lctnRnAddr" checked>
+                <label>도로명주소</label>
+              </div>
+              <div class="checkbox-item">
+                <input type="checkbox" class="field-tele" value="dclrDate" checked>
+                <label>신고일자</label>
+              </div>
+              <div class="checkbox-item">
+                <input type="checkbox" class="field-tele" value="telno" checked>
+                <label>전화번호</label>
+              </div>
+              <div class="checkbox-item">
+                <input type="checkbox" class="field-tele" value="domncn" checked>
+                <label>도메인</label>
+              </div>
+              <div class="checkbox-item">
+                <input type="checkbox" class="field-tele" value="ntslMthdCn" checked>
+                <label>판매방식</label>
+              </div>
+              <div class="checkbox-item">
+                <input type="checkbox" class="field-tele" value="ntslPrdlstCn" checked>
+                <label>판매물품</label>
+              </div>
+              <div class="checkbox-item">
+                <input type="checkbox" class="field-tele" value="operSttusCdNm" checked>
+                <label>운영상태</label>
+              </div>
+              <div class="checkbox-item">
+                <input type="checkbox" class="field-tele" value="corpYnNm" checked>
+                <label>법인여부</label>
+              </div>
+              <div class="checkbox-item">
+                <input type="checkbox" class="field-tele" value="crno" checked>
+                <label>법인등록번호</label>
+              </div>
+              <div class="checkbox-item">
+                <input type="checkbox" class="field-tele" value="ctpvNm" checked>
+                <label>시도명</label>
+              </div>
+              <div class="checkbox-item">
+                <input type="checkbox" class="field-tele" value="rprsvEmladr" checked>
+                <label>대표이메일</label>
+              </div>
+              <div class="checkbox-item">
+                <input type="checkbox" class="field-tele" value="prcsDeptNm" checked>
+                <label>처리부서명</label>
+              </div>
+              <div class="checkbox-item">
+                <input type="checkbox" class="field-tele" value="prmmiYr" checked>
+                <label>허가개시년도</label>
+              </div>
+              <div class="checkbox-item">
+                <input type="checkbox" class="field-tele" value="lctnRnOzip" checked>
+                <label>우편번호</label>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Email Input Section (Bottom) -->
+        <div style="margin-bottom: 24px; padding-bottom: 24px; border-bottom: 1px solid var(--border);">
+          <label for="emailAddress" style="font-weight: 600; font-size: 0.875rem; display: block; margin-bottom: 12px;">📧 메일 수신 주소</label>
+          <input type="text" id="emailAddress" placeholder="email@example.com; email2@example.com (세미콜론으로 구분)" style="width: 100%; padding: 8px 12px; border: 1px solid var(--input); border-radius: 6px; font-size: 0.875rem; background: var(--card); color: var(--foreground);">
+        </div>
+      </div>
+
+      <!-- Action Buttons (Bottom - Right Aligned) -->
+      <div class="modal-footer" style="justify-content: flex-end; gap: 8px;">
+        <button onclick="downloadCSV()" style="background: var(--primary); color: white;">📥 CSV 다운로드</button>
+        <button onclick="sendEmail()" style="background: var(--primary); color: white;">📧 메일 발송</button>
+        <button onclick="closeDataModal()" style="background: var(--muted); color: var(--foreground);">닫기</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const numbersEl = document.getElementById("numbers");
+    const searchBtn = document.getElementById("searchBtn");
+    const statusEl = document.getElementById("status");
+    const resultsEl = document.getElementById("results");
+    let allResults = [];
+    let currentSortColumn = null;
+    let currentSortAscending = true;
+
+    function parse_business_numbers(raw) {
+      const parts = raw.trim().split(/[\s,;]+/);
+      const numbers = [];
+      const seen = new Set();
+      for (const part of parts) {
+        const digits = part.replace(/\D/g, "");
+        if (digits.length === 10 && !seen.has(digits)) {
+          numbers.push(digits);
+          seen.add(digits);
+        }
+      }
+      return numbers;
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
+
+    function getStatusDot(success, found) {
+      if (!success) return '<span style="color: #999; font-size: 0.9rem;">● 오류</span>';
+      if (found) return '<span style="color: #10b981; font-size: 0.9rem;">● 조회됨</span>';
+      return '<span style="color: #999; font-size: 0.9rem;">○ 없음</span>';
+    }
+
+    function getSourceLabel(isNew) {
+      return isNew ? '<span style="font-size: 0.75rem; color: #10b981;">신규</span>' : '<span style="font-size: 0.75rem; color: #999;">캐시</span>';
+    }
+
+    function formatCellValue(value) {
+      if (value === null || value === undefined || value === "") return "";
+      if (typeof value === "object" && !Array.isArray(value)) {
+        const rows = Object.entries(value)
+          .map(([key, val]) => `<tr><th>${escapeHtml(key)}</th><td>${escapeHtml(val)}</td></tr>`)
+          .join("");
+        return `<table class="kv-table nested-table">${rows}</table>`;
+      }
+      return escapeHtml(value);
+    }
+
+    function badgeFor(source) {
+      if (!source.success) return '<span class="badge err">오류</span>';
+      if (source.found) return '<span class="badge ok">조회됨</span>';
+      return '<span class="badge none">없음</span>';
+    }
+
+    function renderItems(items) {
+      if (!items || !items.length) return '<p class="message">표시할 항목이 없습니다.</p>';
+
+      return items.map((item, index) => {
+        const rows = Object.entries(item)
+          .map(([key, value]) => `<tr><th>${escapeHtml(key)}</th><td>${formatCellValue(value)}</td></tr>`)
+          .join("");
+
+        const title = items.length > 1 ? `<div class="source-title">결과 ${index + 1}</div>` : "";
+        return `${title}<table class="kv-table">${rows}</table>`;
+      }).join('<div style="margin:12px 0;"></div>');
+    }
+
+    function renderFTCDetail(ftc) {
+      if (!ftc.success) {
+        return `
+          <div class="source-block">
+            <div class="source-heading ftc">가맹사업정보 ${badgeFor(ftc)}</div>
+            <p class="error-text">${escapeHtml(ftc.error || "조회 실패")}</p>
+          </div>
+        `;
+      }
+
+      if (!ftc.found) {
+        return `
+          <div class="source-block">
+            <div class="source-heading ftc">가맹사업정보 ${badgeFor(ftc)}</div>
+            <p class="message">${escapeHtml(ftc.message || "검색 결과 없음")}</p>
+          </div>
+        `;
+      }
+
+      const 가맹본부 = ftc.가맹본부 || {};
+      const 브랜드목록 = ftc.브랜드 || [];
+      const 총개수 = 브랜드목록.length;
+
+      let 가맹본부HTML = `
+        <div style="margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--border);">
+          <table class="kv-table" style="width: 100%;">
+            <tr><th>법인명</th><td>${escapeHtml(가맹본부.법인명 || '-')}</td></tr>
+            <tr><th>가맹본부관리번호</th><td>${escapeHtml(가맹본부.가맹본부관리번호 || '-')}</td></tr>
+          </table>
+        </div>
+      `;
+
+      let 브랜드HTML = 브랜드목록.map((b, idx) => `
+        <div style="margin-bottom: 12px; padding: 8px; background: var(--muted); border-radius: 6px;">
+          <div style="font-weight: 600; margin-bottom: 8px; font-size: 0.875rem; color: var(--muted-foreground);">브랜드 (${idx + 1}/${총개수}개)</div>
+          <table class="kv-table" style="width: 100%; background: transparent;">
+            <tr><th>브랜드관리번호</th><td>${escapeHtml(b.브랜드관리번호 || '-')}</td></tr>
+            <tr><th>브랜드명</th><td>${escapeHtml(b.브랜드명 || '-')}</td></tr>
+            <tr><th>산업대분류</th><td>${escapeHtml(b.산업대분류 || '-')}</td></tr>
+            <tr><th>산업중분류</th><td>${escapeHtml(b.산업중분류 || '-')}</td></tr>
+            <tr><th>주요상품</th><td>${escapeHtml(b.주요상품 || '-')}</td></tr>
+            <tr><th>가맹개시일자</th><td>${escapeHtml(b.가맹개시일자 || '-')}</td></tr>
+          </table>
+        </div>
+      `).join('');
+
+      return `
+        <div class="source-block">
+          <div class="source-heading ftc">가맹사업정보 ${badgeFor(ftc)}</div>
+          ${가맹본부HTML}
+          ${브랜드HTML}
+        </div>
+      `;
+    }
+
+    function renderSourceBlock(title, source, className, brno) {
+      let body = "";
+
+      if (!source.success) {
+        body = `<p class="error-text">${escapeHtml(source.error || "조회 실패")}</p>`;
+      } else if (!source.found) {
+        body = `<p class="message">${escapeHtml(source.message || "검색 결과 없음")}</p>`;
+      } else if (className === "api" && source.items) {
+        // Bizno API: 사업자번호 일치 검증
+        const matchedItems = source.items.filter(item => {
+          const itemBrno = (item.사업자등록번호 || item.bizno || "").replace(/\D/g, "");
+          return itemBrno === brno;
+        });
+
+        if (matchedItems.length > 0) {
+          body = renderItems(matchedItems);
+        } else {
+          body = `<p class="message">조회값 없음</p>`;
+        }
+      } else {
+        body = renderItems(source.items);
+      }
+
+      return `
+        <div class="source-block">
+          <div class="source-heading ${className}">${escapeHtml(title)} ${badgeFor(source)}</div>
+          ${body}
+        </div>
+      `;
+    }
+
+    function renderCrawlDetail(crawl, brno) {
+      if (!crawl.success) {
+        return `
+          <div class="source-block">
+            <div class="source-heading crawl">Bizno 크롤링 ${badgeFor(crawl)}</div>
+            <p class="error-text">${escapeHtml(crawl.error || "크롤링 실패")}</p>
+          </div>
+        `;
+      }
+
+      if (!crawl.found) {
+        return `
+          <div class="source-block">
+            <div class="source-heading crawl">Bizno 크롤링 ${badgeFor(crawl)}</div>
+            <p class="message">${escapeHtml(crawl.message || "검색 결과 없음")}</p>
+          </div>
+        `;
+      }
+
+      // 사업자번호 검증 (search 데이터에서 사업자번호 추출)
+      if (crawl.search && Object.keys(crawl.search).length > 0) {
+        const crawlBrno = (crawl.search.사업자번호 || crawl.search.bizno || "").replace(/\D/g, "");
+        if (crawlBrno && crawlBrno !== brno) {
+          return `
+            <div class="source-block">
+              <div class="source-heading crawl">Bizno 크롤링 ${badgeFor(crawl)}</div>
+              <p class="message">조회값 없음</p>
+            </div>
+          `;
+        }
+      }
+
+      if (crawl.multiple) {
+        return `
+          <div class="source-block">
+            <div class="source-heading crawl">Bizno 크롤링 ${badgeFor(crawl)}</div>
+            <p class="message">${escapeHtml(crawl.message)}</p>
+            ${renderItems(crawl.search_items)}
+          </div>
+        `;
+      }
+
+      const searchRows = Object.entries(crawl.search || {})
+        .map(([key, value]) => `<tr><th>${escapeHtml(key)}</th><td>${formatCellValue(value)}</td></tr>`)
+        .join("");
+
+      const detailRows = Object.entries(crawl.detail || {})
+        .map(([key, value]) => `<tr><th>${escapeHtml(key)}</th><td>${formatCellValue(value)}</td></tr>`)
+        .join("");
+
+      const detailBody = detailRows
+        ? `<div class="sub-title">상세 페이지 (업종·통신판매업)</div><table class="kv-table">${detailRows}</table>`
+        : `<p class="message">${escapeHtml(crawl.message || "상세 정보 없음")}</p>`;
+
+      return `
+        <div class="source-block">
+          <div class="source-heading crawl">Bizno 크롤링 ${badgeFor(crawl)}</div>
+          <div class="sub-title">검색 결과 목록</div>
+          <table class="kv-table">${searchRows}</table>
+          ${detailBody}
+        </div>
+      `;
+    }
+
+    function formatDate(isoDate) {
+      const date = new Date(isoDate);
+      return date.toLocaleDateString("ko-KR", {
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit"
+      });
+    }
+
+    function renderSummaryTable(results) {
+      const rows = results.map((result, idx) => {
+        const api = result.api;
+        const crawl = result.crawl;
+        const ftc = result.ftc;
+        const biznoResult = getStatusDot(api.bizno.success, api.bizno.found);
+        const crawlResult = getStatusDot(crawl.success, crawl.found);
+        const govResult = getStatusDot(api.gov.success, api.gov.found);
+        const ftcResult = getStatusDot(ftc?.success, ftc?.found);
+        const dateStr = result.query_date ? formatDate(result.query_date) : "-";
+        const sourceLabel = result.is_cached ? '<span style="color: #999; font-size: 0.75rem;">[캐시]</span>' : '<span style="color: #10b981; font-size: 0.75rem;">[신규]</span>';
+
+        return `
+          <tr data-index="${idx}">
+            <td style="text-align: center; font-weight: 500;">${idx + 1}</td>
+            <td>${escapeHtml(result.brno_formatted)}</td>
+            <td>${result.company_name ? escapeHtml(result.company_name) : '-'}</td>
+            <td>${biznoResult}</td>
+            <td>${crawlResult}</td>
+            <td>${govResult}</td>
+            <td>${ftcResult}</td>
+            <td><div style="font-size: 0.8rem;">${dateStr} ${sourceLabel}</div></td>
+            <td style="text-align: center;"><button class="toggle-btn" data-index="${idx}">▼</button></td>
+          </tr>
+          <tr class="detail-row" data-index="${idx}">
+            <td colspan="9" class="detail-cell">
+              <div class="detail-content">
+                <div class="source-grid">
+                  ${renderSourceBlock("Bizno API", api.bizno, "api", result.brno)}
+                  ${renderSourceBlock("통신판매업", api.gov, "gov")}
+                  ${renderCrawlDetail(crawl, result.brno)}
+                  ${renderFTCDetail(ftc)}
+                </div>
+              </div>
+            </td>
+          </tr>
+        `;
+      }).join("");
+
+      return `
+        <table class="summary-table">
+          <thead>
+            <tr>
+              <th style="width: 40px;">No</th>
+              <th class="sortable-th" onclick="sortByColumn('brno_formatted', event)">
+                <span class="sortable-header">
+                  사업자번호
+                  <span class="sort-indicator" data-column="brno_formatted"></span>
+                </span>
+              </th>
+              <th class="sortable-th" onclick="sortByColumn('company_name', event)">
+                <span class="sortable-header">
+                  상호명
+                  <span class="sort-indicator" data-column="company_name"></span>
+                </span>
+              </th>
+              <th class="sortable-th" onclick="sortByColumn('bizno_status', event)">
+                <span class="sortable-header">
+                  Bizno API
+                  <span class="sort-indicator" data-column="bizno_status"></span>
+                </span>
+              </th>
+              <th class="sortable-th" onclick="sortByColumn('crawl_status', event)">
+                <span class="sortable-header">
+                  Bizno 크롤링
+                  <span class="sort-indicator" data-column="crawl_status"></span>
+                </span>
+              </th>
+              <th class="sortable-th" onclick="sortByColumn('gov_status', event)">
+                <span class="sortable-header">
+                  통신판매업
+                  <span class="sort-indicator" data-column="gov_status"></span>
+                </span>
+              </th>
+              <th class="sortable-th" onclick="sortByColumn('ftc_status', event)">
+                <span class="sortable-header">
+                  가맹사업
+                  <span class="sort-indicator" data-column="ftc_status"></span>
+                </span>
+              </th>
+              <th class="sortable-th" onclick="sortByColumn('query_date', event)">
+                <span class="sortable-header">
+                  조회일시
+                  <span class="sort-indicator" data-column="query_date"></span>
+                </span>
+              </th>
+              <th style="width: 60px;"></th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows}
+          </tbody>
+        </table>
+      `;
+    }
+
+    function attachToggleListeners() {
+      document.querySelectorAll(".toggle-btn").forEach(btn => {
+        btn.addEventListener("click", (e) => {
+          const idx = btn.getAttribute("data-index");
+          const detailRow = document.querySelector(`.detail-row[data-index="${idx}"]`);
+          if (detailRow) {
+            detailRow.classList.toggle("open");
+            btn.textContent = detailRow.classList.contains("open") ? "▲" : "▼";
+          }
+        });
+      });
+    }
+
+    function getStatusValue(success, found) {
+      if (success === false) return 0; // 오류 (가장 낮음)
+      if (success && found) return 2; // 조회됨 (가장 높음)
+      if (success && !found) return 1; // 없음 (중간)
+      return -1;
+    }
+
+    function compareValues(a, b, columnName) {
+      if (columnName === 'brno_formatted') {
+        // 사업자번호: 숫자 정렬
+        const numA = parseInt(String(a || "").replace(/\D/g, "")) || 0;
+        const numB = parseInt(String(b || "").replace(/\D/g, "")) || 0;
+        return numA - numB;
+      } else if (columnName === 'company_name') {
+        // 상호명: 문자 정렬 (한글 기준)
+        const strA = String(a || "");
+        const strB = String(b || "");
+        return strA.localeCompare(strB, 'ko');
+      } else if (columnName === 'query_date') {
+        // 날짜: ISO 형식 정렬
+        const dateA = new Date(a || 0).getTime();
+        const dateB = new Date(b || 0).getTime();
+        return dateA - dateB;
+      }
+      return 0;
+    }
+
+    function sortByColumn(columnName, event) {
+      event.stopPropagation();
+
+      // 같은 컬럼을 다시 클릭하면 방향 반대로
+      if (currentSortColumn === columnName) {
+        currentSortAscending = !currentSortAscending;
+      } else {
+        currentSortColumn = columnName;
+        currentSortAscending = true;
+      }
+
+      // 정렬 수행
+      let sortedResults = [...allResults];
+
+      if (['bizno_status', 'crawl_status', 'gov_status', 'ftc_status'].includes(columnName)) {
+        // 상태 컬럼 정렬
+        const statusMap = { '오류': 0, '없음': 1, '조회됨': 2 };
+
+        sortedResults.sort((a, b) => {
+          let statusA, statusB;
+
+          if (columnName === 'bizno_status') {
+            statusA = getStatusValue(a.api?.bizno?.success, a.api?.bizno?.found);
+            statusB = getStatusValue(b.api?.bizno?.success, b.api?.bizno?.found);
+          } else if (columnName === 'crawl_status') {
+            statusA = getStatusValue(a.crawl?.success, a.crawl?.found);
+            statusB = getStatusValue(b.crawl?.success, b.crawl?.found);
+          } else if (columnName === 'gov_status') {
+            statusA = getStatusValue(a.api?.gov?.success, a.api?.gov?.found);
+            statusB = getStatusValue(b.api?.gov?.success, b.api?.gov?.found);
+          } else if (columnName === 'ftc_status') {
+            statusA = getStatusValue(a.ftc?.success, a.ftc?.found);
+            statusB = getStatusValue(b.ftc?.success, b.ftc?.found);
+          }
+
+          return currentSortAscending ? statusA - statusB : statusB - statusA;
+        });
+      } else {
+        // 일반 컬럼 정렬
+        sortedResults.sort((a, b) => {
+          const valA = a[columnName];
+          const valB = b[columnName];
+          const cmp = compareValues(valA, valB, columnName);
+          return currentSortAscending ? cmp : -cmp;
+        });
+      }
+
+      allResults = sortedResults;
+
+      // 정렬 지시자 업데이트
+      document.querySelectorAll('.sort-indicator').forEach(indicator => {
+        indicator.classList.remove('active');
+        indicator.textContent = '';
+      });
+
+      const activeIndicator = document.querySelector(`.sort-indicator[data-column="${columnName}"]`);
+      if (activeIndicator) {
+        activeIndicator.classList.add('active');
+        activeIndicator.textContent = currentSortAscending ? '▲' : '▼';
+      }
+
+      // 테이블 다시 렌더링
+      resultsEl.innerHTML = renderSummaryTable(allResults);
+      attachToggleListeners();
+    }
+
+    function saveDataPreferences() {
+      const biznoFields = Array.from(document.querySelectorAll('.field-bizno:checked')).map(cb => cb.value);
+      const teleFields = Array.from(document.querySelectorAll('.field-tele:checked')).map(cb => cb.value);
+      const crawlFields = Array.from(document.querySelectorAll('.field-crawl:checked')).map(cb => cb.value);
+      const excludeErrors = document.getElementById('excludeErrors')?.checked || false;
+
+      localStorage.setItem('dataPreferences', JSON.stringify({
+        bizno_fields: biznoFields,
+        tele_fields: teleFields,
+        crawl_fields: crawlFields,
+        exclude_errors: excludeErrors
+      }));
+    }
+
+    function restoreDataPreferences() {
+      const saved = localStorage.getItem('dataPreferences');
+      if (saved) {
+        const prefs = JSON.parse(saved);
+        document.querySelectorAll('.field-bizno').forEach(cb => {
+          cb.checked = prefs.bizno_fields && prefs.bizno_fields.includes(cb.value);
+        });
+        document.querySelectorAll('.field-tele').forEach(cb => {
+          cb.checked = prefs.tele_fields && prefs.tele_fields.includes(cb.value);
+        });
+        document.querySelectorAll('.field-crawl').forEach(cb => {
+          cb.checked = prefs.crawl_fields && prefs.crawl_fields.includes(cb.value);
+        });
+        const excludeErrorsCheckbox = document.getElementById('excludeErrors');
+        if (excludeErrorsCheckbox) {
+          excludeErrorsCheckbox.checked = prefs.exclude_errors || false;
+        }
+        updateAllCheckboxes('bizno');
+        updateAllCheckboxes('tele');
+        updateAllCheckboxes('crawl');
+      }
+    }
+
+    function updateAllCheckboxes(type) {
+      const checkboxes = document.querySelectorAll(`.field-${type}`);
+      const allCheckbox = document.getElementById(`${type}_all`);
+      if (allCheckbox) {
+        const checkedCount = Array.from(checkboxes).filter(cb => cb.checked).length;
+        allCheckbox.checked = checkedCount === checkboxes.length && checkboxes.length > 0;
+        allCheckbox.indeterminate = checkedCount > 0 && checkedCount < checkboxes.length;
+      }
+    }
+
+    function openDataModal() {
+      if (!allResults || allResults.length === 0) {
+        alert('조회 결과가 없습니다.');
+        return;
+      }
+      restoreDataPreferences();
+      document.getElementById('dataModal').style.display = 'flex';
+    }
+
+    function closeDataModal() {
+      document.getElementById('dataModal').style.display = 'none';
+    }
+
+    function toggleAllCheckboxes(type) {
+      const checkboxes = document.querySelectorAll(`.field-${type}`);
+      const allCheckbox = document.getElementById(`${type}_all`);
+      if (allCheckbox && checkboxes.length > 0) {
+        checkboxes.forEach(cb => cb.checked = allCheckbox.checked);
+      }
+    }
+
+    async function downloadCSV() {
+      const biznoFields = Array.from(document.querySelectorAll('.field-bizno:checked')).map(cb => cb.value);
+      const teleFields = Array.from(document.querySelectorAll('.field-tele:checked')).map(cb => cb.value);
+      const crawlFields = Array.from(document.querySelectorAll('.field-crawl:checked')).map(cb => cb.value);
+      const excludeErrors = document.getElementById('excludeErrors').checked;
+
+      if (biznoFields.length === 0 && teleFields.length === 0 && crawlFields.length === 0) {
+        alert('선택된 필드가 없습니다.');
+        return;
+      }
+
+      let dataToDownload = allResults;
+
+      if (excludeErrors) {
+        dataToDownload = allResults.filter(record => {
+          const biznoSuccess = record.api?.bizno?.success !== false;
+          const govSuccess = record.api?.gov?.success !== false;
+          const crawlSuccess = record.crawl?.success !== false;
+          return biznoSuccess || govSuccess || crawlSuccess;
+        });
+
+        if (dataToDownload.length === 0) {
+          alert('오류를 제외하면 다운로드할 데이터가 없습니다.');
+          return;
+        }
+      }
+
+      try {
+        const response = await fetch('/api/generate-csv', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            data: dataToDownload,
+            bizno_fields: biznoFields,
+            tele_fields: teleFields,
+            crawl_fields: crawlFields
+          })
+        });
+
+        if (!response.ok) {
+          alert('CSV 생성 실패: ' + response.statusText);
+          return;
+        }
+
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `business_lookup_${new Date().getTime()}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+
+        saveDataPreferences();
+        alert('CSV 다운로드 완료');
+      } catch (error) {
+        alert('오류가 발생했습니다: ' + error.message);
+      }
+    }
+
+    async function sendEmail() {
+      const emailInput = document.getElementById('emailAddress').value.trim();
+      if (!emailInput) {
+        alert('메일 주소를 입력해주세요.');
+        return;
+      }
+
+      const emails = emailInput.split(';')
+        .map(e => e.trim())
+        .filter(e => e.length > 0 && e.includes('@'));
+
+      if (emails.length === 0) {
+        alert('유효한 메일 주소가 없습니다.');
+        return;
+      }
+
+      const biznoFields = Array.from(document.querySelectorAll('.field-bizno:checked')).map(cb => cb.value);
+      const teleFields = Array.from(document.querySelectorAll('.field-tele:checked')).map(cb => cb.value);
+      const crawlFields = Array.from(document.querySelectorAll('.field-crawl:checked')).map(cb => cb.value);
+      const excludeErrors = document.getElementById('excludeErrors').checked;
+
+      if (biznoFields.length === 0 && teleFields.length === 0 && crawlFields.length === 0) {
+        alert('선택된 필드가 없습니다.');
+        return;
+      }
+
+      let dataToSend = allResults;
+
+      if (excludeErrors) {
+        dataToSend = allResults.filter(record => {
+          const biznoSuccess = record.api?.bizno?.success !== false;
+          const govSuccess = record.api?.gov?.success !== false;
+          const crawlSuccess = record.crawl?.success !== false;
+          return biznoSuccess || govSuccess || crawlSuccess;
+        });
+
+        if (dataToSend.length === 0) {
+          alert('오류를 제외하면 발송할 데이터가 없습니다.');
+          return;
+        }
+      }
+
+      try {
+        let successCount = 0;
+        let failCount = 0;
+
+        for (const email of emails) {
+          const response = await fetch('/api/send-email', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              email: email,
+              data: dataToSend,
+              bizno_fields: biznoFields,
+              tele_fields: teleFields,
+              crawl_fields: crawlFields
+            })
+          });
+
+          const result = await response.json();
+          if (result.success) {
+            successCount++;
+          } else {
+            failCount++;
+            console.error(`${email} 발송 실패:`, result.error);
+          }
+        }
+
+        saveDataPreferences();
+
+        if (failCount === 0) {
+          alert(`메일이 발송되었습니다.\n총 ${successCount}명에게 ${dataToSend.length}건 데이터 발송 완료`);
+        } else {
+          alert(`메일 발송 결과\n성공: ${successCount}명\n실패: ${failCount}명`);
+        }
+        closeDataModal();
+      } catch (error) {
+        alert('오류가 발생했습니다: ' + error.message);
+      }
+    }
+
+    searchBtn.addEventListener("click", async () => {
+      const business_numbers = numbersEl.value.trim();
+      if (!business_numbers) {
+        statusEl.textContent = "사업자번호를 입력해 주세요.";
+        return;
+      }
+
+      const numbers = parse_business_numbers(business_numbers);
+      if (!numbers.length) {
+        statusEl.textContent = "유효한 사업자번호가 없습니다.";
+        return;
+      }
+
+      searchBtn.disabled = true;
+      statusEl.textContent = `${numbers.length}건 조회 중`;
+      statusEl.classList.add("loading");
+      resultsEl.innerHTML = "";
+
+      try {
+        const response = await fetch("/api/lookup", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ business_numbers }),
+        });
+
+        const data = await response.json();
+        if (!response.ok || !data.success) {
+          throw new Error(data.error || "조회에 실패했습니다.");
+        }
+
+        allResults = data.results;
+        statusEl.textContent = `${data.count}건 조회 완료`;
+        statusEl.classList.remove("loading");
+        resultsEl.innerHTML = renderSummaryTable(data.results);
+        attachToggleListeners();
+      } catch (error) {
+        statusEl.textContent = error.message;
+        statusEl.classList.remove("loading");
+        resultsEl.innerHTML = `<div class="panel empty">${escapeHtml(error.message)}</div>`;
+      } finally {
+        searchBtn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
