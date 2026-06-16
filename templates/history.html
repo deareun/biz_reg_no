@@ -189,7 +189,6 @@
     }
 
     button {
-      background: var(--primary);
       color: var(--primary-foreground);
       border: none;
       border-radius: 6px;
@@ -202,12 +201,22 @@
     }
 
     button:hover:not(:disabled) {
-      background: oklch(0.398 0.195 277.366);
+      opacity: 0.9;
     }
 
     button:disabled {
       opacity: 0.5;
       cursor: not-allowed;
+    }
+
+    button.danger {
+      background: #dc2626;
+      color: white;
+    }
+
+    button.danger:hover:not(:disabled) {
+      background: #b91c1c;
+      opacity: 1;
     }
 
     /* Modal */
@@ -522,6 +531,144 @@
       height: 32px;
     }
 
+    .editable-cell {
+      cursor: pointer;
+      padding: 4px 8px;
+      border-radius: 4px;
+      transition: background 0.2s;
+    }
+
+    .editable-cell:hover {
+      background: var(--muted);
+    }
+
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 2000;
+      display: none;
+    }
+
+    .modal-overlay.show {
+      display: flex;
+    }
+
+    .combobox-modal {
+      background: var(--card);
+      border-radius: 10px;
+      padding: 24px;
+      max-width: 500px;
+      width: 90%;
+      max-height: 70vh;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 20px 25px rgba(0, 0, 0, 0.15);
+    }
+
+    .combobox-input {
+      padding: 8px 12px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 0.875rem;
+      margin-bottom: 12px;
+      background: var(--card);
+      color: var(--foreground);
+    }
+
+    .combobox-input:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px var(--ring);
+    }
+
+    .combobox-list {
+      overflow-y: auto;
+      max-height: 300px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--card);
+      margin-bottom: 12px;
+    }
+
+    .combobox-item {
+      padding: 8px 12px;
+      cursor: pointer;
+      font-size: 0.875rem;
+      border-bottom: 1px solid var(--border);
+      transition: background 0.2s;
+    }
+
+    .combobox-item:hover,
+    .combobox-item.selected {
+      background: var(--primary-foreground);
+      color: var(--primary);
+    }
+
+    .combobox-item:last-child {
+      border-bottom: none;
+    }
+
+    .combobox-actions {
+      display: flex;
+      gap: 8px;
+      justify-content: flex-end;
+    }
+
+    .save-btn {
+      background: var(--primary);
+      color: var(--primary-foreground);
+      border: none;
+      border-radius: 6px;
+      padding: 8px 16px;
+      font-size: 0.875rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .save-btn:hover {
+      background: oklch(0.398 0.195 277.366);
+    }
+
+    .cancel-btn {
+      background: var(--muted);
+      color: var(--foreground);
+      border: none;
+      border-radius: 6px;
+      padding: 8px 16px;
+      font-size: 0.875rem;
+      font-weight: 500;
+      cursor: pointer;
+    }
+
+    .table-save-btn {
+      background: var(--primary);
+      color: var(--primary-foreground);
+      border: none;
+      border-radius: 4px;
+      padding: 4px 12px;
+      font-size: 0.75rem;
+      font-weight: 500;
+      cursor: pointer;
+      margin-left: 8px;
+      transition: background 0.2s;
+    }
+
+    .table-save-btn:hover {
+      background: oklch(0.398 0.195 277.366);
+    }
+
+    .table-save-btn.hidden {
+      display: none;
+    }
+
     .history-table tbody tr:last-child td {
       border-bottom: none;
     }
@@ -540,15 +687,164 @@
       font-size: 0.75rem;
     }
 
+    .filter-section-wrapper {
+      display: flex;
+      gap: 12px;
+      align-items: flex-end;
+      flex-wrap: wrap;
+      padding: 16px;
+      background: var(--muted);
+      border-radius: 8px;
+      margin-bottom: 16px;
+    }
+
+    .filter-field {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      min-width: 140px;
+      flex: 1;
+    }
+
+    .filter-field .status-filter-group {
+      width: 100%;
+    }
+
+    .filter-field .status-filter-btn {
+      width: 100%;
+      text-align: left;
+      padding-right: 8px;
+    }
+
+    .filter-label {
+      font-size: 0.8125rem;
+      font-weight: 600;
+      color: var(--foreground);
+      margin: 0;
+    }
+
+    .date-range-picker {
+      position: relative;
+    }
+
+    #filterDateRange {
+      padding: 8px 10px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 0.875rem;
+      background: var(--card);
+      color: var(--foreground);
+      cursor: pointer;
+      transition: all 0.2s ease;
+      width: 100%;
+    }
+
+    #filterDateRange:hover {
+      border-color: #d0d0d0;
+      background: #f9f9f9;
+    }
+
+    #filterDateRange:focus {
+      outline: none;
+      border-color: #d0d0d0;
+      background: var(--card);
+      box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.05);
+    }
+
+    /* 간단한 Calendar Range 스타일 */
+    .date-range-calendar {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      background: white;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      padding: 8px;
+      margin-top: 4px;
+      z-index: 1000;
+      min-width: 240px;
+      font-size: 12px;
+    }
+
+    .calendar-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+      padding-bottom: 4px;
+    }
+
+    .calendar-header button {
+      background: none;
+      border: none;
+      padding: 2px 6px;
+      cursor: pointer;
+      font-size: 11px;
+    }
+
+    .calendar-month-title {
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    .calendar-weekdays {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 2px;
+      margin-bottom: 4px;
+    }
+
+    .calendar-weekday {
+      text-align: center;
+      font-size: 10px;
+      color: #666;
+      padding: 2px;
+    }
+
+    .calendar-days {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 2px;
+    }
+
+    .calendar-day {
+      padding: 4px;
+      text-align: center;
+      cursor: pointer;
+      border: 1px solid transparent;
+      border-radius: 3px;
+      background: transparent;
+      font-size: 11px;
+    }
+
+    .calendar-day:hover {
+      background: #f0f0f0;
+    }
+
+    .calendar-day.other-month {
+      color: #ccc;
+      cursor: default;
+    }
+
+    .calendar-day.selected {
+      background: #e0e0e0;
+      font-weight: bold;
+    }
+
+    .calendar-day.in-range {
+      background: #f5f5f5;
+    }
+
     .filter-section {
       display: flex;
       gap: 8px;
       align-items: center;
       flex-wrap: wrap;
       padding: 12px;
-      background: var(--muted);
-      border-radius: 8px;
-      margin-bottom: 16px;
+      background: transparent;
+      border-radius: 0;
+      margin-bottom: 0;
     }
 
     .filter-row {
@@ -561,20 +857,32 @@
     .filter-input {
       flex: 0 1 auto;
       min-width: 130px;
-      padding: 8px 12px;
+      padding: 10px 12px;
       border: 1px solid var(--border);
       border-radius: 6px;
       font-size: 0.875rem;
       background: var(--card);
       color: var(--foreground);
-      height: 36px;
+      height: 38px;
       white-space: nowrap;
+      transition: all 0.2s ease;
+    }
+
+    .filter-input::placeholder {
+      color: var(--muted-foreground);
+      opacity: 0.7;
+    }
+
+    .filter-input:hover {
+      border-color: #d0d0d0;
+      opacity: 0.9;
     }
 
     .filter-input:focus {
       outline: none;
-      border-color: var(--primary);
-      box-shadow: 0 0 0 3px var(--ring);
+      border-color: #d0d0d0;
+      box-shadow: none;
+      background: var(--card);
     }
 
     .filter-input[type="date"] {
@@ -586,14 +894,28 @@
     .filter-buttons {
       display: flex;
       gap: 6px;
-      margin-left: auto;
+      margin-left: 0;
     }
 
     .filter-buttons button {
       padding: 8px 16px;
       font-size: 0.875rem;
-      height: 36px;
+      height: 38px;
       flex-shrink: 0;
+      transition: all 0.2s ease;
+      cursor: pointer;
+      border: none;
+      border-radius: 6px;
+      font-weight: 500;
+    }
+
+    .filter-buttons button:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    .filter-buttons button:active {
+      transform: translateY(0);
     }
 
     .filter-separator {
@@ -610,23 +932,52 @@
     }
 
     .status-filter-btn {
-      background: var(--muted);
+      background-color: #ffffff;
       color: var(--foreground);
       border: 1px solid var(--border);
       border-radius: 6px;
-      padding: 8px 12px;
+      padding: 10px 12px;
       font-size: 0.875rem;
-      height: 36px;
+      height: 38px;
       cursor: pointer;
-      transition: all 0.2s;
+      transition: border-color 0.2s ease, opacity 0.2s ease;
       white-space: nowrap;
       display: flex;
       align-items: center;
-      gap: 4px;
+      gap: 6px;
+      position: relative;
+    }
+
+    .status-filter-btn::after {
+      content: '▼';
+      font-size: 0.65rem;
+      flex-shrink: 0;
+      margin-left: 6px;
+      opacity: 0.6;
+      transition: opacity 0.2s ease;
+    }
+
+    .status-filter-btn:hover::after {
+      opacity: 1;
     }
 
     .status-filter-btn:hover {
-      background: var(--border);
+      border-color: #d0d0d0 !important;
+      background-color: #ffffff !important;
+      background: #ffffff !important;
+    }
+
+    .status-filter-btn:focus {
+      outline: none;
+      border-color: #d0d0d0 !important;
+      background-color: #ffffff !important;
+      background: #ffffff !important;
+    }
+
+    .status-filter-btn:active {
+      background-color: #ffffff !important;
+      background: #ffffff !important;
+      border-color: #d0d0d0;
     }
 
     .status-dropdown {
@@ -635,51 +986,108 @@
       left: 0;
       background: var(--card);
       border: 1px solid var(--border);
-      border-radius: 6px;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      border-radius: 8px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
       z-index: 100;
       min-width: 160px;
-      margin-top: 4px;
+      margin-top: 6px;
+      animation: slideDown 0.2s ease;
+    }
+
+    @keyframes slideDown {
+      from {
+        opacity: 0;
+        transform: translateY(-8px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
     }
 
     .status-checkbox-group {
       display: flex;
       flex-direction: column;
-      gap: 8px;
-      padding: 12px;
+      gap: 0;
+      padding: 4px 0;
     }
 
     .status-checkbox-group label {
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 0;
       cursor: pointer;
       margin: 0;
+      padding: 10px 16px;
       font-size: 0.875rem;
       font-weight: 400;
+      transition: opacity 0.2s ease;
+      position: relative;
+      background: transparent !important;
+      color: var(--foreground);
+      user-select: none;
+    }
+
+    .status-checkbox-group label:hover {
+      background: transparent !important;
+      color: var(--foreground);
+    }
+
+    .status-checkbox-group label::selection {
+      background: transparent;
+      color: var(--foreground);
+    }
+
+    .status-checkbox-group label.checked {
+      background: var(--primary-foreground);
     }
 
     .status-checkbox-group input[type="checkbox"] {
-      cursor: pointer;
-      margin: 0;
+      display: none;
+    }
+
+    .status-checkbox-group label::after {
+      content: '';
+      position: absolute;
+      right: 16px;
+      width: 0;
+      height: 0;
+      border: solid var(--foreground);
+      border-width: 0 2px 2px 0;
+      transform: rotate(45deg);
+      opacity: 0;
+      transition: opacity 0.2s ease;
+    }
+
+    .status-checkbox-group label.checked::after {
+      width: 6px;
+      height: 10px;
+      opacity: 1;
+      border-color: var(--primary);
     }
 
     .status-dropdown-close-btn {
       background: var(--primary);
       color: var(--primary-foreground);
       border: none;
-      border-radius: 4px;
-      padding: 6px 12px;
-      font-size: 0.75rem;
-      font-weight: 500;
+      border-radius: 6px;
+      padding: 8px 12px;
+      font-size: 0.8125rem;
+      font-weight: 600;
       cursor: pointer;
       width: 100%;
       margin-top: 8px;
-      transition: background-color 0.2s;
+      transition: all 0.2s ease;
     }
 
     .status-dropdown-close-btn:hover {
       background: oklch(0.398 0.195 277.366);
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(70, 65, 218, 0.25);
+    }
+
+    .status-dropdown-close-btn:active {
+      transform: translateY(0);
     }
 
     .status-filters-container {
@@ -841,15 +1249,6 @@
           </svg>
           조회이력
         </a>
-        <a href="/category-mapping" class="nav-item">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="3" y="3" width="7" height="7"></rect>
-            <rect x="14" y="3" width="7" height="7"></rect>
-            <rect x="14" y="14" width="7" height="7"></rect>
-            <rect x="3" y="14" width="7" height="7"></rect>
-          </svg>
-          업종매핑
-        </a>
       </nav>
     </aside>
 
@@ -874,46 +1273,57 @@
           </div>
 
           <!-- Filter Section -->
-          <div class="filter-section">
-            <!-- Search Filters -->
-            <input type="text" id="filterBrno" class="filter-input" placeholder="사업자번호">
-            <input type="text" id="filterCompany" class="filter-input" placeholder="상호명">
-            <input type="date" id="filterDateFrom" class="filter-input" title="조회일자 from">
-            <input type="date" id="filterDateTo" class="filter-input" title="조회일자 to">
+          <div class="filter-section-wrapper">
+            <!-- Search Filters with Labels -->
+            <div class="filter-field">
+              <label class="filter-label">사업자번호</label>
+              <input type="text" id="filterBrno" class="filter-input" placeholder="사업자번호">
+            </div>
+            <div class="filter-field">
+              <label class="filter-label">상호명</label>
+              <input type="text" id="filterCompany" class="filter-input" placeholder="상호명">
+            </div>
+            <div class="filter-field">
+              <label class="filter-label">조회기간</label>
+              <div class="date-range-picker">
+                <input type="text" id="filterDateRange" class="filter-input" placeholder="시작일 ~ 종료일" readonly>
+                <div id="dateRangeCalendar" class="date-range-calendar" style="display: none;"></div>
+              </div>
+              <input type="hidden" id="filterDateFrom">
+              <input type="hidden" id="filterDateTo">
+            </div>
 
-            <!-- Separator -->
-            <span class="filter-separator">|</span>
-
-            <!-- Status Filters - Dropdown Buttons -->
-            <div class="status-filters-container">
-              <!-- Bizno Status Dropdown -->
+            <!-- Status Filters with Labels -->
+            <div class="filter-field">
+              <label class="filter-label">Bizno API</label>
               <div class="status-filter-group">
                 <button class="status-filter-btn" onclick="toggleStatusDropdown('bizno')">
-                  Bizno API: <span id="bizno-label">모두</span>▼
+                  <span id="bizno-label">모두</span>
                 </button>
                 <div id="bizno-dropdown" class="status-dropdown" style="display: none;">
                   <div class="status-checkbox-group">
                     <label>
-                      <input type="checkbox" class="bizno-status" value="오류" onchange="updateStatusLabel('bizno')">
+                      <input type="checkbox" class="bizno-status" value="오류" onchange="updateStatusLabel('bizno'); filterHistory();">
                       오류
                     </label>
                     <label>
-                      <input type="checkbox" class="bizno-status" value="조회됨" onchange="updateStatusLabel('bizno')">
+                      <input type="checkbox" class="bizno-status" value="조회됨" onchange="updateStatusLabel('bizno'); filterHistory();">
                       조회됨
                     </label>
                     <label>
-                      <input type="checkbox" class="bizno-status" value="없음" onchange="updateStatusLabel('bizno')">
+                      <input type="checkbox" class="bizno-status" value="없음" onchange="updateStatusLabel('bizno'); filterHistory();">
                       없음
                     </label>
-                    <button class="status-dropdown-close-btn" onclick="closeStatusDropdown('bizno')">완료</button>
                   </div>
                 </div>
               </div>
+            </div>
 
-              <!-- Crawl Status Dropdown -->
+            <div class="filter-field">
+              <label class="filter-label">Bizno 크롤링</label>
               <div class="status-filter-group">
                 <button class="status-filter-btn" onclick="toggleStatusDropdown('crawl')">
-                  Bizno 크롤링: <span id="crawl-label">모두</span>▼
+                  <span id="crawl-label">모두</span>
                 </button>
                 <div id="crawl-dropdown" class="status-dropdown" style="display: none;">
                   <div class="status-checkbox-group">
@@ -929,15 +1339,16 @@
                       <input type="checkbox" class="crawl-status" value="없음" onchange="updateStatusLabel('crawl')">
                       없음
                     </label>
-                    <button class="status-dropdown-close-btn" onclick="closeStatusDropdown('crawl')">완료</button>
                   </div>
                 </div>
               </div>
+            </div>
 
-              <!-- Gov Status Dropdown -->
+            <div class="filter-field">
+              <label class="filter-label">통신판매업</label>
               <div class="status-filter-group">
                 <button class="status-filter-btn" onclick="toggleStatusDropdown('gov')">
-                  통신판매업: <span id="gov-label">모두</span>▼
+                  <span id="gov-label">모두</span>
                 </button>
                 <div id="gov-dropdown" class="status-dropdown" style="display: none;">
                   <div class="status-checkbox-group">
@@ -953,15 +1364,16 @@
                       <input type="checkbox" class="gov-status" value="없음" onchange="updateStatusLabel('gov')">
                       없음
                     </label>
-                    <button class="status-dropdown-close-btn" onclick="closeStatusDropdown('gov')">완료</button>
                   </div>
                 </div>
               </div>
+            </div>
 
-              <!-- FTC Status Dropdown -->
+            <div class="filter-field">
+              <label class="filter-label">가맹사업</label>
               <div class="status-filter-group">
                 <button class="status-filter-btn" onclick="toggleStatusDropdown('ftc')">
-                  가맹사업: <span id="ftc-label">모두</span>▼
+                  <span id="ftc-label">모두</span>
                 </button>
                 <div id="ftc-dropdown" class="status-dropdown" style="display: none;">
                   <div class="status-checkbox-group">
@@ -977,18 +1389,14 @@
                       <input type="checkbox" class="ftc-status" value="없음" onchange="updateStatusLabel('ftc')">
                       없음
                     </label>
-                    <button class="status-dropdown-close-btn" onclick="closeStatusDropdown('ftc')">완료</button>
                   </div>
                 </div>
               </div>
             </div>
 
-            <!-- Separator -->
-            <span class="filter-separator" style="width: 100%; text-align: center; margin: 8px 0;">|</span>
-
             <!-- Action Buttons -->
             <div class="filter-buttons">
-              <button onclick="filterHistory()" style="background: var(--primary);">필터 적용</button>
+              <button onclick="filterHistory()" style="background: var(--primary);">검색</button>
               <button onclick="resetFilters()" style="background: var(--muted); color: var(--foreground);">초기화</button>
             </div>
           </div>
@@ -1296,6 +1704,20 @@
     </div>
   </div>
 
+  <!-- 업종 매핑 수정 모달 -->
+  <div id="mappingModal" class="modal-overlay">
+    <div class="combobox-modal">
+      <h3 style="margin: 0 0 16px 0; font-size: 1.125rem;">업종 선택</h3>
+      <input type="text" id="mappingSearchInput" class="combobox-input" placeholder="검색..." autocomplete="off">
+      <div class="combobox-list" id="mappingListContainer">
+        <!-- 동적 생성 -->
+      </div>
+      <div class="combobox-actions">
+        <button class="cancel-btn" onclick="closeMappingModal()">취소</button>
+      </div>
+    </div>
+  </div>
+
   <script>
     const historyTable = document.getElementById("historyTable");
     const totalCount = document.getElementById("total-count");
@@ -1303,6 +1725,11 @@
     let allRecords = [];
     let currentSortColumn = null;
     let currentSortAscending = true;
+
+    // 매핑 수정용 전역 변수
+    let categoryData = { mct_ry_cd: {}, hpsn_mct_zcd: {} };
+    let currentEditingRecord = null;
+    let currentMappingType = null; // 'mct_ry_cd' or 'hpsn_mct_zcd'
 
     // 통신판매업 필드 한글 매핑
     const TELECOM_FIELD_MAPPING = {
@@ -1558,16 +1985,20 @@
       const govResult = getStatusDot(api.gov?.success, api.gov?.found);
       const ftcResult = getStatusDot(ftc?.success, ftc?.found);
 
-      // 매핑 결과 렌더링 (null 체크 추가)
-      let mctDisplay = '없음';
+      // 매핑 결과 렌더링 (조회하기와 동일한 형식)
+      let mctDisplay = '<span style="color: var(--muted-foreground);">없음</span>';
       if (mapping.mct_ry_cd && typeof mapping.mct_ry_cd === 'object' && mapping.mct_ry_cd.code) {
-        mctDisplay = `${mapping.mct_ry_cd.code} - ${mapping.mct_ry_cd.name}`;
+        mctDisplay = `<div style="font-size: 0.8rem;">${escapeHtml(mapping.mct_ry_cd.code)}<br><span style="color: var(--muted-foreground);">${escapeHtml(mapping.mct_ry_cd.name)}</span></div>`;
       }
 
-      let hpsn_mct_zcdDisplay = '없음';
+      let hpsn_mct_zcdDisplay = '<span style="color: var(--muted-foreground);">없음</span>';
       if (mapping.hpsn_mct_zcd && typeof mapping.hpsn_mct_zcd === 'object' && mapping.hpsn_mct_zcd.code) {
-        hpsn_mct_zcdDisplay = `${mapping.hpsn_mct_zcd.code} - ${mapping.hpsn_mct_zcd.name}`;
+        hpsn_mct_zcdDisplay = `<div style="font-size: 0.8rem;">${escapeHtml(mapping.hpsn_mct_zcd.code)}<br><span style="color: var(--muted-foreground);">${escapeHtml(mapping.hpsn_mct_zcd.name)}</span></div>`;
       }
+
+      // 저장 버튼 표시 여부 (수정된 record만)
+      const isModified = modifiedRecords.has(record.id);
+      const saveButtonHtml = isModified ? `<button class="table-save-btn" onclick="saveMapping(${record.id})">[저장]</button>` : '';
 
       return `
         <tr data-id="${record.id || index}" class="history-row">
@@ -1581,11 +2012,12 @@
           <td>${crawlResult}</td>
           <td>${govResult}</td>
           <td>${ftcResult}</td>
-          <td>${mctDisplay}</td>
-          <td>${hpsn_mct_zcdDisplay}</td>
+          <td class="editable-cell" onclick="openMappingModal(${record.id}, 'mct_ry_cd')" title="클릭하여 편집">${mctDisplay}</td>
+          <td class="editable-cell" onclick="openMappingModal(${record.id}, 'hpsn_mct_zcd')" title="클릭하여 편집">${hpsn_mct_zcdDisplay}</td>
           <td style="text-align: center;">
             <div class="action-buttons">
               <button class="toggle-btn" data-index="${index}">▼</button>
+              ${saveButtonHtml}
               <button class="delete-btn" onclick="deleteRecord(${record.id || index})" title="삭제">🗑️</button>
             </div>
           </td>
@@ -1617,17 +2049,30 @@
 
         allRecords = data.records || [];
         totalCount.textContent = allRecords.length;
-        updateFilteredCount();
 
         const tbody = historyTable.querySelector("tbody");
         if (allRecords.length === 0) {
           tbody.innerHTML = '<tr id="emptyMessage"><td colspan="11" class="message">이력이 없습니다.</td></tr>';
+          document.getElementById('filtered-count').textContent = 0;
           return;
         }
 
         tbody.innerHTML = allRecords.map(renderHistoryRow).join("");
         attachToggleListeners();
-        resetFilters();
+
+        // 모든 행을 표시하고 카운트 업데이트
+        const rows = document.querySelectorAll('.history-row');
+        rows.forEach(row => {
+          row.style.display = '';
+        });
+        updateFilteredCount();
+
+        // 필터 입력 필드만 초기화 (체크박스는 건드리지 않음)
+        document.getElementById('filterBrno').value = '';
+        document.getElementById('filterCompany').value = '';
+        document.getElementById('filterDateRange').value = '';
+        document.getElementById('filterDateFrom').value = '';
+        document.getElementById('filterDateTo').value = '';
       } catch (error) {
         console.error("이력 로드 에러:", error);
       }
@@ -1645,6 +2090,163 @@
         });
       });
     }
+
+    // 매핑 모달 함수들
+    async function openMappingModal(recordId, mappingType) {
+      currentEditingRecord = allRecords.find(r => r.id === recordId);
+      if (!currentEditingRecord) return;
+
+      currentMappingType = mappingType;
+
+      // 카테고리 데이터가 없으면 로드
+      if (Object.keys(categoryData.mct_ry_cd).length === 0) {
+        try {
+          const response = await fetch("/api/categories");
+          const data = await response.json();
+          if (data.success) {
+            categoryData = {
+              mct_ry_cd: data.mct_ry_cd || {},
+              hpsn_mct_zcd: data.hpsn_mct_zcd || {}
+            };
+          }
+        } catch (error) {
+          console.error("카테고리 데이터 로드 실패:", error);
+          alert("카테고리 데이터를 로드할 수 없습니다.");
+          return;
+        }
+      }
+
+      // 모달 표시
+      const modal = document.getElementById("mappingModal");
+      const searchInput = document.getElementById("mappingSearchInput");
+      modal.classList.add("show");
+      searchInput.value = "";
+      searchInput.focus();
+
+      // 카테고리 리스트 렌더링
+      loadCategoriesForModal();
+
+      // 검색 이벤트 리스너
+      searchInput.removeEventListener("input", filterMappingListHandler);
+      searchInput.addEventListener("input", filterMappingListHandler);
+    }
+
+    function closeMappingModal() {
+      const modal = document.getElementById("mappingModal");
+      modal.classList.remove("show");
+      const searchInput = document.getElementById("mappingSearchInput");
+      searchInput.value = "";
+      searchInput.removeEventListener("input", filterMappingListHandler);
+    }
+
+    function filterMappingListHandler(e) {
+      filterMappingList(e.target.value);
+    }
+
+    function loadCategoriesForModal() {
+      const categories = categoryData[currentMappingType] || {};
+      const container = document.getElementById("mappingListContainer");
+
+      let html = "";
+      for (const code in categories) {
+        const name = categories[code];
+        html += `<div class="combobox-item" onclick="selectMappingItem('${code}', '${escapeHtml(name)}')">${escapeHtml(code)} - ${escapeHtml(name)}</div>`;
+      }
+
+      container.innerHTML = html;
+    }
+
+    function filterMappingList(searchText) {
+      const categories = categoryData[currentMappingType] || {};
+      const container = document.getElementById("mappingListContainer");
+      const searchLower = searchText.toLowerCase();
+
+      let html = "";
+      for (const code in categories) {
+        const name = categories[code];
+        const codeLower = code.toLowerCase();
+        const nameLower = name.toLowerCase();
+
+        // 코드 또는 명칭에 검색어 포함
+        if (codeLower.includes(searchLower) || nameLower.includes(searchLower)) {
+          html += `<div class="combobox-item" onclick="selectMappingItem('${code}', '${escapeHtml(name)}')">${escapeHtml(code)} - ${escapeHtml(name)}</div>`;
+        }
+      }
+
+      if (html === "") {
+        html = '<div style="padding: 12px; color: var(--muted-foreground);">검색 결과가 없습니다.</div>';
+      }
+
+      container.innerHTML = html;
+    }
+
+    function selectMappingItem(code, name) {
+      if (currentEditingRecord && currentMappingType) {
+        saveMappingSelection(code, name);
+      }
+    }
+
+    function saveMappingSelection(code, name) {
+      const confirmed = window.confirm("해당 변경사항을 저장하겠습니까?");
+      if (confirmed) {
+        saveMappingToServer(currentEditingRecord.id, code, name);
+      }
+    }
+
+    async function saveMappingToServer(recordId, code, name) {
+      try {
+        const mappingData = {};
+        mappingData[currentMappingType] = { code, name };
+
+        const response = await fetch("/api/update-mapping", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            record_id: recordId,
+            [currentMappingType]: { code, name }
+          })
+        });
+
+        const data = await response.json();
+        if (data.success) {
+          // 해당 레코드 업데이트
+          const record = allRecords.find(r => r.id === recordId);
+          if (record) {
+            if (!record.mapping) record.mapping = {};
+            record.mapping[currentMappingType] = { code, name };
+
+            // 테이블 셀 업데이트
+            const row = document.querySelector(`tr[data-id="${recordId}"]`);
+            if (row) {
+              const cellIndex = currentMappingType === 'mct_ry_cd' ? 8 : 9;
+              const cell = row.cells[cellIndex];
+              if (cell) {
+                cell.innerHTML = `<div style="font-size: 0.8rem;">${escapeHtml(code)}<br><span style="color: var(--muted-foreground);">${escapeHtml(name)}</span></div>`;
+              }
+            }
+          }
+
+          closeMappingModal();
+        } else {
+          alert("업종 매핑 저장 실패: " + data.error);
+        }
+      } catch (error) {
+        console.error("업종 매핑 저장 에러:", error);
+        alert("업종 매핑 저장 중 오류가 발생했습니다.");
+      }
+    }
+
+    // 모달 배경 클릭 시 닫기
+    document.addEventListener("DOMContentLoaded", function() {
+      const modal = document.getElementById("mappingModal");
+      if (modal) {
+        modal.addEventListener("click", function(e) {
+          if (e.target === modal) {
+            closeMappingModal();
+          }
+        });
+      }
+    });
 
     function getStatusValueFromData(success, found) {
       if (success === false) return 0; // 오류 (가장 낮음)
@@ -1791,7 +2393,8 @@
     }
 
     function filterHistory() {
-      const brnoTextFilter = document.getElementById('filterBrno').value.toLowerCase().trim();
+      // 사업자번호에서 하이픈/공백 제거
+      const brnoTextFilter = document.getElementById('filterBrno').value.trim().replace(/\D/g, '');
       const companyFilter = document.getElementById('filterCompany').value.toLowerCase().trim();
       const dateFromFilter = document.getElementById('filterDateFrom').value;
       const dateToFilter = document.getElementById('filterDateTo').value;
@@ -1808,7 +2411,8 @@
         const cells = row.querySelectorAll('td');
         if (cells.length < 2) return;
 
-        const brno = cells[1].textContent.trim().toLowerCase();
+        // 사업자번호: 하이픈 제거하여 비교
+        const brno = cells[1].textContent.trim().replace(/\D/g, '');
         const company = cells[2].textContent.trim().toLowerCase();
         const dateStr = cells[3].textContent.trim();
         const biznoStatusCell = cells[4].textContent.trim();
@@ -1896,9 +2500,15 @@
       document.getElementById('filterDateFrom').value = '';
       document.getElementById('filterDateTo').value = '';
 
-      // Reset status checkboxes and labels
-      document.querySelectorAll('.bizno-status, .crawl-status, .gov-status, .ftc-status').forEach(cb => {
+      // Reset status checkboxes without triggering onchange
+      const checkboxes = document.querySelectorAll('.bizno-status, .crawl-status, .gov-status, .ftc-status');
+      checkboxes.forEach(cb => {
+        // 임시로 onchange 제거
+        const onchangeHandler = cb.onchange;
+        cb.onchange = null;
         cb.checked = false;
+        // onchange 복원
+        cb.onchange = onchangeHandler;
       });
 
       // Update all labels to "모두"
@@ -1914,6 +2524,7 @@
 
       document.getElementById('selectAllCheckbox').checked = false;
 
+      // 모든 행을 표시
       const rows = document.querySelectorAll('.history-row');
       rows.forEach(row => {
         row.style.display = '';
@@ -2265,7 +2876,6 @@
     // 드롭다운 닫기 함수
     function closeStatusDropdown(source) {
       document.getElementById(`${source}-dropdown`).style.display = 'none';
-      filterHistory();
     }
 
     // 버튼 레이블 업데이트 함수
@@ -2279,6 +2889,19 @@
       } else {
         label.textContent = `${checkedCount}개 선택`;
       }
+
+      // 체크박스 label에 'checked' 클래스 추가/제거
+      const dropdown = document.getElementById(`${source}-dropdown`);
+      if (dropdown) {
+        dropdown.querySelectorAll('label').forEach((lbl, idx) => {
+          const checkbox = checkboxes[idx];
+          if (checkbox && checkbox.checked) {
+            lbl.classList.add('checked');
+          } else {
+            lbl.classList.remove('checked');
+          }
+        });
+      }
     }
 
     // 선택된 상태값 가져오기 함수 (수정됨)
@@ -2286,6 +2909,116 @@
       const checkboxes = document.querySelectorAll(`.${source}-status:checked`);
       return Array.from(checkboxes).map(cb => cb.value);
     }
+
+    // Date Range Picker
+    let selectedFromDate = null;
+    let selectedToDate = null;
+    let isSelectingRange = false;
+
+    const filterDateRangeInput = document.getElementById('filterDateRange');
+    const dateRangeCalendar = document.getElementById('dateRangeCalendar');
+    const filterDateFromInput = document.getElementById('filterDateFrom');
+    const filterDateToInput = document.getElementById('filterDateTo');
+
+    function formatDate(date) {
+      if (!date) return '';
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    }
+
+    function updateDateRangeDisplay() {
+      if (selectedFromDate && selectedToDate) {
+        filterDateRangeInput.value = `${formatDate(selectedFromDate)} ~ ${formatDate(selectedToDate)}`;
+        filterDateFromInput.value = formatDate(selectedFromDate);
+        filterDateToInput.value = formatDate(selectedToDate);
+      } else if (selectedFromDate) {
+        filterDateRangeInput.value = `${formatDate(selectedFromDate)} ~ `;
+      } else {
+        filterDateRangeInput.value = '';
+      }
+    }
+
+    function renderCalendar() {
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = now.getMonth();
+
+      let html = '<div class="calendar-header">';
+      html += '<button onclick="document.getElementById(\'dateRangeCalendar\').style.display=\'none\'">닫기</button>';
+      html += `<div class="calendar-month-title">${year}년 ${month + 1}월</div>`;
+      html += '</div>';
+
+      const firstDay = new Date(year, month, 1);
+      const lastDay = new Date(year, month + 1, 0);
+      const startDate = new Date(firstDay);
+      startDate.setDate(startDate.getDate() - firstDay.getDay());
+
+      html += '<div class="calendar-weekdays">';
+      ['일', '월', '화', '수', '목', '금', '토'].forEach(day => {
+        html += `<div class="calendar-weekday">${day}</div>`;
+      });
+      html += '</div>';
+
+      html += '<div class="calendar-days">';
+      const currentDate = new Date(startDate);
+      for (let i = 0; i < 42; i++) {
+        const isOtherMonth = currentDate.getMonth() !== month;
+        const isToday = currentDate.toDateString() === new Date().toDateString();
+        const dateStr = formatDate(currentDate);
+        const isSelected = (selectedFromDate && selectedToDate &&
+          currentDate >= selectedFromDate && currentDate <= selectedToDate);
+        const isStart = selectedFromDate && currentDate.toDateString() === selectedFromDate.toDateString();
+        const isEnd = selectedToDate && currentDate.toDateString() === selectedToDate.toDateString();
+
+        let classes = 'calendar-day';
+        if (isOtherMonth) classes += ' other-month';
+        if (isSelected && !isStart && !isEnd) classes += ' in-range';
+        if (isStart || isEnd) classes += ' range-start range-end';
+        if (isToday) classes += ' today';
+
+        html += `<button class="${classes}" onclick="selectDate('${dateStr}')">${currentDate.getDate()}</button>`;
+        currentDate.setDate(currentDate.getDate() + 1);
+      }
+      html += '</div>';
+
+      dateRangeCalendar.innerHTML = html;
+    }
+
+    function selectDate(dateStr) {
+      const selectedDate = new Date(dateStr + 'T00:00:00');
+      if (!selectedFromDate) {
+        selectedFromDate = selectedDate;
+      } else if (!selectedToDate) {
+        if (selectedDate < selectedFromDate) {
+          selectedToDate = selectedFromDate;
+          selectedFromDate = selectedDate;
+        } else {
+          selectedToDate = selectedDate;
+        }
+        dateRangeCalendar.style.display = 'none';
+        filterHistory();
+      } else {
+        selectedFromDate = selectedDate;
+        selectedToDate = null;
+      }
+      updateDateRangeDisplay();
+      renderCalendar();
+    }
+
+    filterDateRangeInput.addEventListener('click', () => {
+      dateRangeCalendar.style.display = dateRangeCalendar.style.display === 'none' ? 'block' : 'none';
+      if (dateRangeCalendar.style.display === 'block') {
+        renderCalendar();
+      }
+    });
+
+    document.addEventListener('click', (e) => {
+      if (!filterDateRangeInput.contains(e.target) && !dateRangeCalendar.contains(e.target)) {
+        dateRangeCalendar.style.display = 'none';
+      }
+    });
 
     // 페이지 로드 시 이력 불러오기
     loadHistory();

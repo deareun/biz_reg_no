@@ -479,6 +479,143 @@
       padding: 24px 16px;
     }
 
+    .editable-cell {
+      cursor: pointer;
+      padding: 4px 8px;
+      border-radius: 4px;
+      transition: background 0.2s;
+    }
+
+    .editable-cell:hover {
+      background: var(--muted);
+    }
+
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 2000;
+      display: none;
+    }
+
+    .modal-overlay.show {
+      display: flex;
+    }
+
+    .combobox-modal {
+      background: var(--card);
+      border-radius: 10px;
+      padding: 24px;
+      max-width: 500px;
+      width: 90%;
+      max-height: 70vh;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 20px 25px rgba(0, 0, 0, 0.15);
+    }
+
+    .combobox-input {
+      padding: 8px 12px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 0.875rem;
+      margin-bottom: 12px;
+      background: var(--card);
+      color: var(--foreground);
+    }
+
+    .combobox-input:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px var(--ring);
+    }
+
+    .combobox-list {
+      overflow-y: auto;
+      max-height: 300px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--card);
+      margin-bottom: 12px;
+    }
+
+    .combobox-item {
+      padding: 8px 12px;
+      cursor: pointer;
+      font-size: 0.875rem;
+      border-bottom: 1px solid var(--border);
+      transition: background 0.2s;
+    }
+
+    .combobox-item:hover,
+    .combobox-item.selected {
+      background: var(--primary-foreground);
+      color: var(--primary);
+    }
+
+    .combobox-item:last-child {
+      border-bottom: none;
+    }
+
+    .combobox-actions {
+      display: flex;
+      gap: 8px;
+      justify-content: flex-end;
+    }
+
+    .save-btn {
+      background: var(--primary);
+      color: var(--primary-foreground);
+      border: none;
+      border-radius: 6px;
+      padding: 8px 16px;
+      font-size: 0.875rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .save-btn:hover {
+      background: oklch(0.398 0.195 277.366);
+    }
+
+    .cancel-btn {
+      background: var(--muted);
+      color: var(--foreground);
+      border: none;
+      border-radius: 6px;
+      padding: 8px 16px;
+      font-size: 0.875rem;
+      font-weight: 500;
+      cursor: pointer;
+    }
+
+    .table-save-btn {
+      background: var(--primary);
+      color: var(--primary-foreground);
+      border: none;
+      border-radius: 4px;
+      padding: 4px 12px;
+      font-size: 0.75rem;
+      font-weight: 500;
+      cursor: pointer;
+      margin-left: 8px;
+      transition: background 0.2s;
+    }
+
+    .table-save-btn:hover {
+      background: oklch(0.398 0.195 277.366);
+    }
+
+    .table-save-btn.hidden {
+      display: none;
+    }
 
     @media (max-width: 768px) {
       .layout {
@@ -560,15 +697,32 @@
             <button id="searchBtn" type="button">조회</button>
           </div>
           <span id="status" class="status-text"></span>
-          <div style="margin-top: 12px; display: flex; align-items: center; gap: 8px;">
-            <input type="checkbox" id="performCategoryMapping" style="cursor: pointer;">
-            <label for="performCategoryMapping" style="margin: 0; font-size: 0.875rem; cursor: pointer; font-weight: 500;">업종매핑 동시 진행</label>
+          <div style="margin-top: 12px; padding: 12px; background: var(--muted); border-radius: 6px; display: flex; flex-direction: column; gap: 8px;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <input type="checkbox" id="performCategoryMapping" style="cursor: pointer; width: 18px; height: 18px; margin: 0;">
+              <label for="performCategoryMapping" style="margin: 0; font-size: 0.875rem; cursor: pointer; font-weight: 600;">업종매핑 동시 진행</label>
+            </div>
+            <p style="margin: 0; font-size: 0.8rem; color: var(--muted-foreground); line-height: 1.4;">AI를 활용하여 사업명으로부터 가맹점업종을 자동 분류합니다. LLM 토큰이 차감되어 비용이 발생하며, 작업 수행 시간이 소요됩니다.</p>
           </div>
         </div>
 
         <div id="results"></div>
       </div>
     </main>
+  </div>
+
+  <!-- 업종 매핑 수정 모달 -->
+  <div id="mappingModal" class="modal-overlay">
+    <div class="combobox-modal">
+      <h3 style="margin: 0 0 16px 0; font-size: 1.125rem;">업종 선택</h3>
+      <input type="text" id="mappingSearchInput" class="combobox-input" placeholder="검색..." autocomplete="off">
+      <div class="combobox-list" id="mappingListContainer">
+        <!-- 동적 생성 -->
+      </div>
+      <div class="combobox-actions">
+        <button class="cancel-btn" onclick="closeMappingModal()">취소</button>
+      </div>
+    </div>
   </div>
 
   <!-- Data Modal -->
@@ -808,6 +962,11 @@
     let allResults = [];
     let currentSortColumn = null;
     let currentSortAscending = true;
+
+    // 매핑 수정용 전역 변수
+    let categoryData = { mct_ry_cd: {}, hpsn_mct_zcd: {} };
+    let currentEditingIndex = null;
+    let currentMappingType = null; // 'mct_ry_cd' or 'hpsn_mct_zcd'
 
     function parse_business_numbers(raw) {
       const parts = raw.trim().split(/[\s,;]+/);
@@ -1057,6 +1216,9 @@
 
 
     function renderSummaryTable(results) {
+      const performCategoryMapping = document.getElementById('performCategoryMapping').checked;
+      const colSpan = performCategoryMapping ? 11 : 9;
+
       const rows = results.map((result, idx) => {
         const api = result.api;
         const crawl = result.crawl;
@@ -1068,6 +1230,21 @@
         const dateStr = result.query_date ? formatDate(result.query_date) : "-";
         const sourceLabel = result.is_cached ? '<span style="color: #999; font-size: 0.75rem;">[캐시]</span>' : '<span style="color: #10b981; font-size: 0.75rem;">[신규]</span>';
 
+        // 업종매핑 정보
+        const mappingInfo = result.mapping || {};
+        const mctCode = mappingInfo.mct_ry_cd?.code || '-';
+        const mctName = mappingInfo.mct_ry_cd?.name || '-';
+        const hpsnCode = mappingInfo.hpsn_mct_zcd?.code || '-';
+        const hpsnName = mappingInfo.hpsn_mct_zcd?.name || '-';
+
+        let mappingCells = '';
+        if (performCategoryMapping) {
+          mappingCells = `
+            <td class="editable-cell" onclick="openMappingModal(${idx}, 'mct_ry_cd')" title="클릭하여 편집"><div style="font-size: 0.8rem;">${escapeHtml(mctCode)}<br><span style="color: var(--muted-foreground);">${escapeHtml(mctName)}</span></div></td>
+            <td class="editable-cell" onclick="openMappingModal(${idx}, 'hpsn_mct_zcd')" title="클릭하여 편집"><div style="font-size: 0.8rem;">${escapeHtml(hpsnCode)}<br><span style="color: var(--muted-foreground);">${escapeHtml(hpsnName)}</span></div></td>
+          `;
+        }
+
         return `
           <tr data-index="${idx}">
             <td style="text-align: center; font-weight: 500;">${idx + 1}</td>
@@ -1077,11 +1254,12 @@
             <td>${crawlResult}</td>
             <td>${govResult}</td>
             <td>${ftcResult}</td>
+            ${mappingCells}
             <td><div style="font-size: 0.8rem;">${dateStr} ${sourceLabel}</div></td>
             <td style="text-align: center;"><button class="toggle-btn" data-index="${idx}">▼</button></td>
           </tr>
           <tr class="detail-row" data-index="${idx}">
-            <td colspan="9" class="detail-cell">
+            <td colspan="${colSpan}" class="detail-cell">
               <div class="detail-content">
                 <div class="source-grid">
                   ${renderSourceBlock("Bizno API", api.bizno, "api", result.brno)}
@@ -1094,6 +1272,21 @@
           </tr>
         `;
       }).join("");
+
+      const categoryHeaders = performCategoryMapping ? `
+        <th class="sortable-th">
+          <span class="sortable-header">
+            가맹점업종기준
+            <span class="sort-indicator" data-column="mct_ry_cd_status"></span>
+          </span>
+        </th>
+        <th class="sortable-th">
+          <span class="sortable-header">
+            초개인화업종기준
+            <span class="sort-indicator" data-column="hpsn_mct_zcd_status"></span>
+          </span>
+        </th>
+      ` : '';
 
       return `
         <table class="summary-table">
@@ -1136,6 +1329,7 @@
                   <span class="sort-indicator" data-column="ftc_status"></span>
                 </span>
               </th>
+              ${categoryHeaders}
               <th class="sortable-th" onclick="sortByColumn('query_date', event)">
                 <span class="sortable-header">
                   조회일시
@@ -1490,8 +1684,13 @@ searchBtn.addEventListener("click", async () => {
         return;
       }
 
+      const performCategoryMapping = document.getElementById('performCategoryMapping').checked;
+      console.log('=== 조회 시작 ===');
+      console.log('업종매핑 체크박스:', performCategoryMapping);
+      console.log('사업자번호:', numbers);
+
       searchBtn.disabled = true;
-      statusEl.textContent = `${numbers.length}건 조회 중`;
+      statusEl.textContent = `${numbers.length}건 조회 중${performCategoryMapping ? ' (업종매핑 포함)' : ''}`;
       statusEl.classList.add("loading");
       resultsEl.innerHTML = "";
 
@@ -1500,26 +1699,188 @@ searchBtn.addEventListener("click", async () => {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            business_numbers
+            business_numbers,
+            perform_category_mapping: performCategoryMapping
           }),
         });
 
         const data = await response.json();
+        console.log('API 응답:', data);
+        console.log('첫 번째 결과:', data.results?.[0]);
+        console.log('매핑 데이터:', data.results?.[0]?.mapping);
+
         if (!response.ok || !data.success) {
           throw new Error(data.error || "조회에 실패했습니다.");
         }
 
         allResults = data.results;
-        statusEl.textContent = `${data.count}건 조회 완료`;
+        const completionText = `${data.count}건 조회 완료${performCategoryMapping && data.results?.[0]?.mapping ? ' ✓ 업종매핑 완료' : ''}`;
+        statusEl.innerHTML = `${completionText} <a href="/history" style="margin-left: 16px; color: var(--primary); text-decoration: none; cursor: pointer; font-weight: 500;">→ 조회이력 보기</a>`;
         statusEl.classList.remove("loading");
+
+        console.log('테이블 렌더링 전 - 체크박스 상태:', document.getElementById('performCategoryMapping').checked);
         resultsEl.innerHTML = renderSummaryTable(data.results);
+        console.log('테이블 렌더링 완료');
+        console.log('테이블 HTML:', resultsEl.innerHTML.substring(0, 500));
+
         attachToggleListeners();
       } catch (error) {
+        console.error('에러:', error);
         statusEl.textContent = error.message;
         statusEl.classList.remove("loading");
         resultsEl.innerHTML = `<div class="panel empty">${escapeHtml(error.message)}</div>`;
       } finally {
         searchBtn.disabled = false;
+      }
+    });
+
+    // 매핑 모달 함수들
+    async function openMappingModal(resultIndex, mappingType) {
+      currentEditingIndex = resultIndex;
+      currentMappingType = mappingType;
+
+      if (resultIndex < 0 || resultIndex >= allResults.length) {
+        alert('유효하지 않은 인덱스입니다.');
+        return;
+      }
+
+      // 카테고리 데이터가 없으면 로드
+      if (Object.keys(categoryData.mct_ry_cd).length === 0) {
+        try {
+          const response = await fetch("/api/categories");
+          const data = await response.json();
+          if (data.success) {
+            categoryData = {
+              mct_ry_cd: data.mct_ry_cd || {},
+              hpsn_mct_zcd: data.hpsn_mct_zcd || {}
+            };
+          }
+        } catch (error) {
+          console.error("카테고리 데이터 로드 실패:", error);
+          alert("카테고리 데이터를 로드할 수 없습니다.");
+          return;
+        }
+      }
+
+      // 모달 표시
+      const modal = document.getElementById("mappingModal");
+      const searchInput = document.getElementById("mappingSearchInput");
+      modal.classList.add("show");
+      searchInput.value = "";
+      searchInput.focus();
+
+      // 카테고리 리스트 렌더링
+      loadCategoriesForModal();
+
+      // 검색 이벤트 리스너
+      searchInput.removeEventListener("input", filterMappingListHandler);
+      searchInput.addEventListener("input", filterMappingListHandler);
+    }
+
+    function closeMappingModal() {
+      const modal = document.getElementById("mappingModal");
+      modal.classList.remove("show");
+      const searchInput = document.getElementById("mappingSearchInput");
+      searchInput.value = "";
+      searchInput.removeEventListener("input", filterMappingListHandler);
+    }
+
+    function filterMappingListHandler(e) {
+      filterMappingList(e.target.value);
+    }
+
+    function loadCategoriesForModal() {
+      const categories = categoryData[currentMappingType] || {};
+      const container = document.getElementById("mappingListContainer");
+
+      let html = "";
+      for (const code in categories) {
+        const name = categories[code];
+        html += `<div class="combobox-item" onclick="selectMappingItem('${code}', '${escapeHtml(name)}')">${escapeHtml(code)} - ${escapeHtml(name)}</div>`;
+      }
+
+      container.innerHTML = html;
+    }
+
+    function filterMappingList(searchText) {
+      const categories = categoryData[currentMappingType] || {};
+      const container = document.getElementById("mappingListContainer");
+      const searchLower = searchText.toLowerCase();
+
+      let html = "";
+      for (const code in categories) {
+        const name = categories[code];
+        const codeLower = code.toLowerCase();
+        const nameLower = name.toLowerCase();
+
+        // 코드 또는 명칭에 검색어 포함
+        if (codeLower.includes(searchLower) || nameLower.includes(searchLower)) {
+          html += `<div class="combobox-item" onclick="selectMappingItem('${code}', '${escapeHtml(name)}')">${escapeHtml(code)} - ${escapeHtml(name)}</div>`;
+        }
+      }
+
+      if (html === "") {
+        html = '<div style="padding: 12px; color: var(--muted-foreground);">검색 결과가 없습니다.</div>';
+      }
+
+      container.innerHTML = html;
+    }
+
+    function selectMappingItem(code, name) {
+      if (currentEditingIndex !== null && currentMappingType) {
+        saveMappingSelection(code, name);
+      }
+    }
+
+    function saveMappingSelection(code, name) {
+      const confirmed = window.confirm("해당 변경사항을 저장하겠습니까?");
+      if (confirmed) {
+        updateMappingInAllResults(currentEditingIndex, code, name);
+      }
+    }
+
+    function updateMappingInAllResults(resultIndex, code, name) {
+      const result = allResults[resultIndex];
+      if (!result) return;
+
+      // 매핑 객체 초기화
+      if (!result.mapping) {
+        result.mapping = {};
+      }
+
+      // 선택한 매핑 타입 업데이트
+      result.mapping[currentMappingType] = { code, name };
+
+      // 테이블 셀 업데이트
+      updateMappingCellInTable(resultIndex, currentMappingType, code, name);
+
+      // 모달 닫기
+      closeMappingModal();
+    }
+
+    function updateMappingCellInTable(resultIndex, mappingType, code, name) {
+      const row = document.querySelector(`tr[data-index="${resultIndex}"]`);
+      if (!row) return;
+
+      const cellIndex = mappingType === 'mct_ry_cd' ? 8 : 9;
+      const cell = row.cells[cellIndex];
+      if (cell) {
+        cell.innerHTML = `<div style="font-size: 0.8rem;">${escapeHtml(code)}<br><span style="color: var(--muted-foreground);">${escapeHtml(name)}</span></div>`;
+        cell.className = 'editable-cell';
+        cell.onclick = () => openMappingModal(resultIndex, mappingType);
+        cell.title = '클릭하여 편집';
+      }
+    }
+
+    // 모달 배경 클릭 시 닫기
+    document.addEventListener("DOMContentLoaded", function() {
+      const modal = document.getElementById("mappingModal");
+      if (modal) {
+        modal.addEventListener("click", function(e) {
+          if (e.target === modal) {
+            closeMappingModal();
+          }
+        });
       }
     });
   </script>

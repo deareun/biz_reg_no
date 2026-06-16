@@ -2,6 +2,8 @@ import os
 import re
 import csv
 import io
+import json
+import queue
 import smtplib
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
@@ -13,9 +15,15 @@ from email.mime.application import MIMEApplication
 import requests
 from dotenv import load_dotenv
 from flask import Flask, jsonify, render_template, request
+from flask_cors import CORS
 
 from bizno_scraper import crawl_bizno
 from models import db, QueryHistory, FtcBrandInfo
+
+try:
+    import google.generativeai as genai
+except ImportError:
+    genai = None
 
 load_dotenv()
 
@@ -23,6 +31,7 @@ app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///query_history.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
+CORS(app)
 db.init_app(app)
 
 with app.app_context():
@@ -180,8 +189,8 @@ def load_categories():
                 if len(parts) >= 2:
                     code = parts[0].strip()
                     name = parts[1].strip()
-                    # '기타' 업종 제외
-                    if '기타' not in name and code and code[0].isdigit():
+                    # '기타'로 시작하는 업종만 제외 (금융-기타 같은 경우는 포함)
+                    if code and code[0].isdigit() and not name.startswith('기타'):
                         categories['mct_ry_cd'][code] = name
 
             # HPSN 섹션 (초개인화 기준)
@@ -196,8 +205,8 @@ def load_categories():
                     if len(parts) >= 8:
                         code = parts[0].strip()
                         name = parts[7].strip()
-                        # '기타' 업종 제외
-                        if '기타' not in name and code and code[0].isalpha():
+                        # '기타'로 시작하는 업종만 제외 (금융-기타 같은 경우는 포함)
+                        if code and code[0].isalpha() and not name.startswith('기타'):
                             categories['hpsn_mct_zcd'][code] = name
 
             print(f"카테고리 로딩 완료: MCT_RY_CD {len(categories['mct_ry_cd'])}개, HPSN {len(categories['hpsn_mct_zcd'])}개")
@@ -430,37 +439,193 @@ def extract_company_name(bizno_result, crawl_result, gov_result) -> str:
     return ""
 
 
+def perform_category_mapping(brno: str, company_name: str, bizno_result: dict, crawl_result: dict,
+                            gov_result: dict, ftc_result: dict) -> dict:
+    """Gemini API를 사용하여 업종 매핑 수행"""
+    if not company_name or not GEMINI_API_KEY or not genai:
+        return {}
+
+    try:
+        genai.configure(api_key=GEMINI_API_KEY)
+        model = genai.GenerativeModel(GEMINI_MODEL)
+
+        # 데이터 추출
+        crawl_info = crawl_result.get('search', {}) if crawl_result else {}
+        crawl_detail = crawl_result.get('detail', {}) if crawl_result else {}
+        industry_category = crawl_detail.get('국세청산업분류', {}) if isinstance(crawl_detail.get('국세청산업분류'), dict) else {}
+
+        gov_items = gov_result.get('items', []) if gov_result else []
+        gov_info = gov_items[0] if gov_items else {}
+
+        ftc_items = ftc_result.get('브랜드', []) if ftc_result else []
+        ftc_info = ftc_items[0] if ftc_items else {}
+
+        # 테이블 형태의 데이터 구성
+        table_data = f"""사업자번호|상호명|국세청산업분류_대분류|중분류|소분류|세분류|세세분류|통신판매업_판매물품|가맹사업_산업대분류|중분류|소분류|주요상품값
+{brno}|{company_name}|{industry_category.get('대분류', '')}|{industry_category.get('중분류', '')}|{industry_category.get('소분류', '')}|{industry_category.get('세분류', '')}|{industry_category.get('세세분류', '')}|{gov_info.get('판매물품', '')}|{ftc_info.get('산업대분류', '')}|{ftc_info.get('산업중분류', '')}|{ftc_info.get('주요상품', '')}|"""
+
+        # Category 데이터를 프롬프트에 포함
+        mct_ry_cd_list = '\n'.join([f"  {code}: {name}" for code, name in CATEGORIES['mct_ry_cd'].items()])
+        hpsn_mct_zcd_list = '\n'.join([f"  {code}: {name}" for code, name in CATEGORIES['hpsn_mct_zcd'].items()])
+
+        prompt = f"""다음 사업 정보를 분석하여 최적의 가맹점업종 코드를 매핑하세요.
+무조건 1개씩 선택해야 합니다. NULL값이나 빈 값은 허용되지 않습니다.
+
+[사업 정보]
+{table_data}
+
+[가맹점업종기준 코드 (mct_ry_cd) - 전체 {len(CATEGORIES['mct_ry_cd'])}개]
+{', '.join([f'{code}({name})' for code, name in CATEGORIES['mct_ry_cd'].items()])}
+
+[초개인화업종기준 코드 (hpsn_mct_zcd) - 전체 {len(CATEGORIES['hpsn_mct_zcd'])}개]
+{', '.join([f'{code}({name})' for code, name in CATEGORIES['hpsn_mct_zcd'].items()])}
+
+위의 사업 정보를 바탕으로 category.txt의 코드를 참고하여 최적의 업종을 매핑하세요.
+국세청 산업분류, 가맹사업 정보, 통신판매 물품 등을 종합적으로 고려하세요.
+
+**중요**: 반드시 아래 규칙을 따르세요:
+1. mct_ry_cd와 hpsn_mct_zcd 모두 정확히 1개씩만 선택하세요
+2. 완전히 확실하지 않으면 가장 가능성 높은 것을 선택하세요
+3. null, 빈 값, 미지정은 허용되지 않습니다
+4. 선택할 수 없으면 기본값으로 일반적인 업종을 선택하세요
+
+응답 형식 (JSON):
+{{
+  "mct_ry_cd": {{"code": "CODE", "name": "업종명"}},
+  "hpsn_mct_zcd": {{"code": "CODE", "name": "업종명"}},
+  "reasoning": "매핑 이유"
+}}
+
+주의:
+- 반드시 위의 코드 목록에서만 선택하세요
+- code는 숫자만 입력하세요
+- name도 정확히 입력하세요
+- JSON 형식을 정확히 지키세요"""
+
+        response = model.generate_content(prompt)
+        result_text = response.text.strip()
+
+        print(f"[매핑] {brno} - {company_name}")
+        print(f"[prompt] : {prompt}")
+        print(f"LLM 응답: {result_text[:200]}...")
+
+        # JSON 추출 시도
+        try:
+            # ```json ... ``` 형식이 있으면 제거
+            if "```json" in result_text:
+                result_text = result_text.split("```json")[1].split("```")[0].strip()
+            elif "```" in result_text:
+                result_text = result_text.split("```")[1].split("```")[0].strip()
+
+            mapping_result = json.loads(result_text)
+
+            # 결과 검증
+            if mapping_result.get('mct_ry_cd'):
+                mct_code = mapping_result['mct_ry_cd'].get('code')
+                if mct_code and mct_code not in CATEGORIES['mct_ry_cd']:
+                    print(f"경고: mct_ry_cd 코드 {mct_code}가 카테고리에 없음")
+                    mapping_result['mct_ry_cd']['name'] = CATEGORIES['mct_ry_cd'].get(mct_code, mapping_result['mct_ry_cd'].get('name'))
+
+            if mapping_result.get('hpsn_mct_zcd'):
+                hpsn_code = mapping_result['hpsn_mct_zcd'].get('code')
+                if hpsn_code and hpsn_code not in CATEGORIES['hpsn_mct_zcd']:
+                    print(f"경고: hpsn_mct_zcd 코드 {hpsn_code}가 카테고리에 없음")
+                    mapping_result['hpsn_mct_zcd']['name'] = CATEGORIES['hpsn_mct_zcd'].get(hpsn_code, mapping_result['hpsn_mct_zcd'].get('name'))
+
+            print(f"매핑 결과: {mapping_result}")
+            return mapping_result
+        except json.JSONDecodeError as e:
+            print(f"JSON 파싱 실패: {result_text}")
+            print(f"파싱 에러: {e}")
+            return {}
+
+    except Exception as e:
+        print(f"업종매핑 실패: {e}")
+        import traceback
+        traceback.print_exc()
+        return {}
 
 
-def lookup_one(brno: str) -> dict:
+
+
+def lookup_one(brno: str, perform_mapping: bool = False) -> dict:
     from datetime import datetime
 
     # 3개월 이내 조회 기록 확인 (앱 컨텍스트 필요)
+    is_cached = False
+    bizno_result = None
+    gov_result = None
+    crawl_result = None
+    ftc_result = None
+    company_name = None
+    query_date = None
+
     try:
         recent_record = QueryHistory.get_recent_by_brno(brno)
         if recent_record:
+            is_cached = True
             record_dict = recent_record.to_dict()
-            record_dict["is_cached"] = True
-            return record_dict
+            bizno_result = record_dict.get("api", {}).get("bizno")
+            gov_result = record_dict.get("api", {}).get("gov")
+            crawl_result = record_dict.get("crawl")
+            ftc_result = record_dict.get("ftc")
+            company_name = record_dict.get("company_name")
+            query_date = record_dict.get("query_date")
 
     except Exception as e:
         print(f"DB 조회 실패 (캐시): {e}")
 
-    # 새로 조회 (동기 처리 - 같은 context 내에서 실행)
-    bizno_result = query_bizno(brno)
-    gov_result = query_gov(brno)
-    crawl_result = crawl_bizno(brno)
-    ftc_result = query_ftc(brno)
+    # 캐시에 없으면 새로 조회
+    if not is_cached:
+        bizno_result = query_bizno(brno)
+        gov_result = query_gov(brno)
+        crawl_result = crawl_bizno(brno)
+        ftc_result = query_ftc(brno)
+        company_name = extract_company_name(bizno_result, crawl_result, gov_result)
+        query_date = datetime.utcnow().isoformat()
 
-    # 상호명 추출
-    company_name = extract_company_name(bizno_result, crawl_result, gov_result)
+        # DB에 저장
+        try:
+            history = QueryHistory(
+                brno=brno,
+                brno_formatted=format_business_number(brno),
+                company_name=company_name,
+                bizno_result=bizno_result,
+                gov_result=gov_result,
+                crawl_result=crawl_result,
+                ftc_result=ftc_result,
+            )
+            db.session.add(history)
+            db.session.commit()
+        except Exception as e:
+            print(f"DB 저장 실패: {e}")
+            db.session.rollback()
+
+    # 업종매핑 수행 (필요한 경우)
+    mapping = None
+    if perform_mapping and company_name:
+        mapping = perform_category_mapping(brno, company_name, bizno_result, crawl_result,
+                                          gov_result, ftc_result)
+
+        # 매핑 결과를 DB에 저장 (캐시 여부 상관없이 항상 저장)
+        if mapping:
+            try:
+                history = QueryHistory.query.filter_by(brno=brno).order_by(QueryHistory.query_date.desc()).first()
+                if history:
+                    history.mct_ry_cd_result = mapping.get('mct_ry_cd')
+                    history.hpsn_mct_zcd_result = mapping.get('hpsn_mct_zcd')
+                    db.session.commit()
+                    print(f"매핑 결과 저장 완료: {brno} (캐시여부: {is_cached})")
+            except Exception as e:
+                print(f"매핑 결과 저장 실패: {e}")
+                db.session.rollback()
 
     result = {
         "brno": brno,
         "brno_formatted": format_business_number(brno),
         "company_name": company_name,
-        "query_date": datetime.utcnow().isoformat(),
-        "is_cached": False,
+        "query_date": query_date,
+        "is_cached": is_cached,
         "api": {
             "bizno": bizno_result,
             "gov": gov_result,
@@ -469,22 +634,8 @@ def lookup_one(brno: str) -> dict:
         "ftc": ftc_result,
     }
 
-    # DB에 저장
-    try:
-        history = QueryHistory(
-            brno=brno,
-            brno_formatted=format_business_number(brno),
-            company_name=company_name,
-            bizno_result=bizno_result,
-            gov_result=gov_result,
-            crawl_result=crawl_result,
-            ftc_result=ftc_result,
-        )
-        db.session.add(history)
-        db.session.commit()
-    except Exception as e:
-        print(f"DB 저장 실패: {e}")
-        db.session.rollback()
+    if mapping:
+        result["mapping"] = mapping
 
     return result
 
@@ -568,16 +719,17 @@ def delete_multiple_history():
         return jsonify({"success": False, "error": str(e)}), 500
 
 
-def _lookup_with_context(brno: str) -> dict:
+def _lookup_with_context(brno: str, perform_mapping: bool = False) -> dict:
     """앱 컨텍스트 내에서 lookup_one 실행"""
     with app.app_context():
-        return lookup_one(brno)
+        return lookup_one(brno, perform_mapping)
 
 
 @app.post("/api/lookup")
 def lookup():
     payload = request.get_json(silent=True) or {}
     raw_input = payload.get("business_numbers", "")
+    perform_mapping = payload.get("perform_category_mapping", False)
     numbers = parse_business_numbers(raw_input)
 
     if not numbers:
@@ -588,13 +740,72 @@ def lookup():
 
     results = []
     with ThreadPoolExecutor(max_workers=min(len(numbers), 5)) as executor:
-        futures = {executor.submit(_lookup_with_context, brno): brno for brno in numbers}
+        futures = {executor.submit(_lookup_with_context, brno, perform_mapping): brno for brno in numbers}
         for future in as_completed(futures):
             results.append(future.result())
 
     results.sort(key=lambda item: numbers.index(item["brno"]))
 
     return jsonify({"success": True, "count": len(results), "results": results})
+
+
+@app.post("/api/lookup-stream")
+def lookup_stream():
+    from flask import Response, stream_with_context
+
+    payload = request.get_json(silent=True) or {}
+    raw_input = payload.get("business_numbers", "")
+    perform_mapping = payload.get("perform_category_mapping", False)
+    numbers = parse_business_numbers(raw_input)
+
+    sse_headers = {
+        'X-Accel-Buffering': 'no',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+    }
+
+    if not numbers:
+        def err_gen():
+            yield f"data: {json.dumps({'type': 'error', 'message': '유효한 사업자등록번호가 없습니다.'})}\n\n"
+        return Response(stream_with_context(err_gen()), content_type='text/event-stream', headers=sse_headers)
+
+    if len(numbers) > 100:
+        def err_gen():
+            yield f"data: {json.dumps({'type': 'error', 'message': '한 번에 최대 100개까지 조회할 수 있습니다.'})}\n\n"
+        return Response(stream_with_context(err_gen()), content_type='text/event-stream', headers=sse_headers)
+
+    event_q = queue.Queue()
+
+    def thread_wrapper(brno):
+        event_q.put({'type': 'processing', 'brno': brno})
+        try:
+            result = _lookup_with_context(brno, perform_mapping)
+        except Exception as e:
+            result = {'brno': brno, 'success': False, 'error': str(e)}
+        event_q.put({'type': 'result', 'brno': brno, 'result': result})
+
+    def generate():
+        yield f"data: {json.dumps({'type': 'start', 'total': len(numbers)})}\n\n"
+        completed = 0
+        total = len(numbers)
+
+        with ThreadPoolExecutor(max_workers=min(total, 5)) as executor:
+            for brno in numbers:
+                executor.submit(thread_wrapper, brno)
+
+            while completed < total:
+                try:
+                    event = event_q.get(timeout=120)
+                    yield f"data: {json.dumps(event)}\n\n"
+                    if event.get('type') == 'result':
+                        completed += 1
+                except queue.Empty:
+                    yield f"data: {json.dumps({'type': 'error', 'message': '일부 항목 조회 시간 초과'})}\n\n"
+                    break
+
+        yield f"data: {json.dumps({'type': 'done', 'completed': completed, 'total': total})}\n\n"
+
+    return Response(stream_with_context(generate()), content_type='text/event-stream', headers=sse_headers)
 
 
 @app.get("/api/categories")
@@ -605,6 +816,39 @@ def get_categories():
         "mct_ry_cd": CATEGORIES.get('mct_ry_cd', {}),
         "hpsn_mct_zcd": CATEGORIES.get('hpsn_mct_zcd', {})
     })
+
+
+@app.post("/api/update-mapping")
+def update_mapping():
+    """매핑 결과 수동 업데이트"""
+    payload = request.get_json(silent=True) or {}
+    record_id = payload.get("record_id")
+    mct_ry_cd = payload.get("mct_ry_cd")
+    hpsn_mct_zcd = payload.get("hpsn_mct_zcd")
+
+    if not record_id:
+        return jsonify({"success": False, "error": "record_id가 필요합니다."}), 400
+
+    try:
+        record = QueryHistory.query.get(record_id)
+        if not record:
+            return jsonify({"success": False, "error": "기록을 찾을 수 없습니다."}), 404
+
+        # 매핑 결과 업데이트
+        if mct_ry_cd:
+            record.mct_ry_cd_result = mct_ry_cd
+        if hpsn_mct_zcd:
+            record.hpsn_mct_zcd_result = hpsn_mct_zcd
+
+        db.session.commit()
+        return jsonify({
+            "success": True,
+            "message": "매핑이 업데이트되었습니다.",
+            "updated_record": record.to_dict()
+        })
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"success": False, "error": str(e)}), 500
 
 
 @app.get("/api/ftc/search")
@@ -783,9 +1027,12 @@ def send_email():
         body = "조회 결과를 첨부파일로 보내드립니다."
         msg.attach(MIMEText(body, 'plain', 'utf-8'))
 
-        # CSV 첨부
-        csv_attachment = MIMEApplication(csv_content.encode('utf-8'), Name="조회결과.csv")
-        csv_attachment['Content-Disposition'] = 'attachment; filename="조회결과.csv"'
+        # CSV 첨부 (utf-8-sig: Excel 한글 인식용 BOM, octet-stream: 보안메일 호환)
+        csv_bytes = csv_content.encode('utf-8-sig')
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f"business_registration_no_{len(data)}_{timestamp}.csv"
+        csv_attachment = MIMEApplication(csv_bytes, _subtype='octet-stream')
+        csv_attachment.add_header('Content-Disposition', 'attachment', filename=filename)
         msg.attach(csv_attachment)
 
         # SMTP로 발송

@@ -155,9 +155,9 @@ def crawl_bizno(brno: str) -> dict:
     if not matched:
         return {
             "success": True,
-            "found": True,
+            "found": False,
             "multiple": True,
-            "message": "검색 결과가 여러 건입니다. 사업자번호와 일치하는 항목을 찾지 못했습니다.",
+            "message": "검색 결과가 여러 건이나 사업자번호와 정확히 일치하는 항목이 없습니다.",
             "search_items": [
                 {k: v for k, v in item.items() if k != "article_path"}
                 for item in search_result["items"]
