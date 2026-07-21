@@ -40,6 +40,11 @@ import {
   AlertCircle,
   Loader2,
 } from 'lucide-react';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
 import { useToast } from '@/hooks/use-toast';
 import { historyAPI, categoryAPI, errorHandler } from '@/lib/api';
 import { HistoryRecord, HistoryFilter, Categories } from '@/lib/types';
@@ -227,6 +232,7 @@ export default function HistoryTable({
                 mapping: {
                   ...(editingMctCode && { mct_ry_cd: { code: editingMctCode, name: mctName || '' } }),
                   ...(editingHpsnCode && { hpsn_mct_zcd: { code: editingHpsnCode, name: hpsnName || '' } }),
+                  reasoning: '[사용자 수기입력건]',
                 },
               }
             : r
@@ -482,6 +488,21 @@ export default function HistoryTable({
                           </div>
                         ) : (
                           <div className="text-sm space-y-1">
+                            {(record.mapping?.mct_ry_cd || record.mapping?.hpsn_mct_zcd) && (
+                              <div className="flex items-center gap-1 mb-1">
+                                <Popover>
+                                  <PopoverTrigger asChild>
+                                    <button className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-muted-foreground/30 text-white text-xs font-bold hover:bg-muted-foreground/60 transition-colors" title="매핑사유">
+                                      ?
+                                    </button>
+                                  </PopoverTrigger>
+                                  <PopoverContent className="w-80 text-sm whitespace-pre-wrap" side="left">
+                                    <p className="font-semibold mb-1 text-xs text-muted-foreground">매핑사유</p>
+                                    <p>{record.mapping?.reasoning || '사유 없음'}</p>
+                                  </PopoverContent>
+                                </Popover>
+                              </div>
+                            )}
                             {record.mapping?.mct_ry_cd && (
                               <p className="text-xs">
                                 <span className="text-muted-foreground">MCT:</span> {record.mapping.mct_ry_cd.code}

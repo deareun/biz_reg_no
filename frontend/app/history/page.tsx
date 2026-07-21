@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useEffect, useRef, useCallback } from 'react'
-import { Pencil, ArrowUp, Download } from 'lucide-react'
+import { Pencil, ArrowUp, Download, HelpCircle } from 'lucide-react'
 import type { DateRange } from 'react-day-picker'
 import { Calendar } from '@/components/ui/calendar'
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
@@ -588,7 +588,7 @@ export default function HistoryPage() {
         body: JSON.stringify({ record_id: recordId, [type]: { code, name } }),
       })).json()
       if (data.success) {
-        const update = (records: any[]) => records.map(r => r.id === recordId ? { ...r, mapping: { ...(r.mapping || {}), [type]: { code, name } } } : r)
+        const update = (records: any[]) => records.map(r => r.id === recordId ? { ...r, mapping: { ...(r.mapping || {}), [type]: { code, name }, reasoning: '[사용자 수기입력건]' } } : r)
         setAllRecords(update); setDisplayRecords(update)
         setMappingModal(null)
       } else alert('매핑 저장 실패: ' + data.error)
@@ -776,7 +776,20 @@ export default function HistoryPage() {
                           </div>
                         </td>
                         <td style={{ ...tdStyle, textAlign: 'center' }}>
-                          <div style={{ display: 'flex', gap: 4, justifyContent: 'center' }}>
+                          <div style={{ display: 'flex', gap: 4, justifyContent: 'center', alignItems: 'center' }}>
+                            {(mapping.mct_ry_cd?.code || mapping.hpsn_mct_zcd?.code) && (
+                              <Popover>
+                                <PopoverTrigger asChild>
+                                  <button style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center' }} title="매핑사유">
+                                    <HelpCircle style={{ width: 16, height: 16, color: '#c4c4c4' }} />
+                                  </button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-80 text-sm whitespace-pre-wrap" side="top">
+                                  <p style={{ fontWeight: 600, fontSize: '0.75rem', color: '#8b8b94', marginBottom: 4 }}>매핑사유</p>
+                                  <p>{mapping.reasoning || '사유 없음'}</p>
+                                </PopoverContent>
+                              </Popover>
+                            )}
                             <button onClick={() => toggleRow(r.id)} style={{ background: 'transparent', color: '#8b8b94', border: '1px solid #ebe9f1', width: 28, height: 28, borderRadius: 6, cursor: 'pointer', fontSize: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                               {isExp ? '▲' : '▼'}
                             </button>

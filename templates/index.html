@@ -490,6 +490,47 @@
       background: var(--muted);
     }
 
+    .mapping-cell-inner {
+      display: flex;
+      align-items: flex-start;
+      gap: 4px;
+    }
+
+    .reasoning-btn {
+      flex-shrink: 0;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: var(--muted-foreground);
+      color: #fff;
+      font-size: 10px;
+      font-weight: 700;
+      line-height: 16px;
+      text-align: center;
+      cursor: pointer;
+      border: none;
+      padding: 0;
+      margin-top: 2px;
+      opacity: 0.65;
+      transition: opacity 0.15s;
+    }
+    .reasoning-btn:hover { opacity: 1; }
+
+    .reasoning-popup {
+      position: fixed;
+      z-index: 9999;
+      background: #1e1e2e;
+      color: #e2e8f0;
+      border-radius: 8px;
+      padding: 12px 14px;
+      font-size: 0.78rem;
+      line-height: 1.55;
+      max-width: 320px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+      pointer-events: none;
+      white-space: pre-wrap;
+    }
+
     .modal-overlay {
       position: fixed;
       top: 0;
@@ -724,6 +765,9 @@
       </div>
     </div>
   </div>
+
+  <!-- 매핑사유 팝업 -->
+  <div id="reasoningPopup" class="reasoning-popup" style="display:none;"></div>
 
   <!-- Data Modal -->
   <div id="dataModal" class="modal" style="display: none;">
@@ -1236,12 +1280,27 @@
         const mctName = mappingInfo.mct_ry_cd?.name || '-';
         const hpsnCode = mappingInfo.hpsn_mct_zcd?.code || '-';
         const hpsnName = mappingInfo.hpsn_mct_zcd?.name || '-';
+        const reasoning = mappingInfo.reasoning || '';
+        const hasMappingData = !!(mappingInfo.mct_ry_cd || mappingInfo.hpsn_mct_zcd);
 
         let mappingCells = '';
         if (performCategoryMapping) {
+          const reasoningText = reasoning || (hasMappingData ? '사유 없음' : '');
+          const reasoningBtn = reasoningText
+            ? `<button class="reasoning-btn" data-reasoning="${escapeHtml(reasoningText)}" onclick="event.stopPropagation();showReasoningFromBtn(event,this)" title="매핑사유">?</button>`
+            : '';
           mappingCells = `
-            <td class="editable-cell" onclick="openMappingModal(${idx}, 'mct_ry_cd')" title="클릭하여 편집"><div style="font-size: 0.8rem;">${escapeHtml(mctCode)}<br><span style="color: var(--muted-foreground);">${escapeHtml(mctName)}</span></div></td>
-            <td class="editable-cell" onclick="openMappingModal(${idx}, 'hpsn_mct_zcd')" title="클릭하여 편집"><div style="font-size: 0.8rem;">${escapeHtml(hpsnCode)}<br><span style="color: var(--muted-foreground);">${escapeHtml(hpsnName)}</span></div></td>
+            <td class="editable-cell" onclick="openMappingModal(${idx}, 'mct_ry_cd')" title="클릭하여 편집">
+              <div class="mapping-cell-inner">
+                <div style="font-size: 0.8rem;">${escapeHtml(mctCode)}<br><span style="color: var(--muted-foreground);">${escapeHtml(mctName)}</span></div>
+                ${reasoningBtn}
+              </div>
+            </td>
+            <td class="editable-cell" onclick="openMappingModal(${idx}, 'hpsn_mct_zcd')" title="클릭하여 편집">
+              <div class="mapping-cell-inner">
+                <div style="font-size: 0.8rem;">${escapeHtml(hpsnCode)}<br><span style="color: var(--muted-foreground);">${escapeHtml(hpsnName)}</span></div>
+              </div>
+            </td>
           `;
         }
 
@@ -1785,6 +1844,28 @@ searchBtn.addEventListener("click", async () => {
       searchInput.removeEventListener("input", filterMappingListHandler);
     }
 
+    // ── 매핑사유 팝업 ──
+    function showReasoningFromBtn(event, btn) {
+      const text = btn.getAttribute('data-reasoning') || '사유 없음';
+      showReasoningPopup(event, text);
+    }
+
+    function showReasoningPopup(event, text) {
+      const popup = document.getElementById('reasoningPopup');
+      popup.textContent = text;
+      popup.style.display = 'block';
+      const x = Math.min(event.clientX + 12, window.innerWidth - 340);
+      const y = Math.min(event.clientY + 12, window.innerHeight - 160);
+      popup.style.left = x + 'px';
+      popup.style.top  = y + 'px';
+      document.addEventListener('click', hideReasoningPopup, { once: true });
+    }
+
+    function hideReasoningPopup() {
+      const popup = document.getElementById('reasoningPopup');
+      if (popup) popup.style.display = 'none';
+    }
+
     function filterMappingListHandler(e) {
       filterMappingList(e.target.value);
     }
@@ -1848,24 +1929,28 @@ searchBtn.addEventListener("click", async () => {
         result.mapping = {};
       }
 
-      // 선택한 매핑 타입 업데이트
+      // 선택한 매핑 타입 업데이트 + reasoning을 사용자 수기입력건으로 변경
       result.mapping[currentMappingType] = { code, name };
+      result.mapping.reasoning = '[사용자 수기입력건]';
 
       // 테이블 셀 업데이트
-      updateMappingCellInTable(resultIndex, currentMappingType, code, name);
+      updateMappingCellInTable(resultIndex, currentMappingType, code, name, '[사용자 수기입력건]');
 
       // 모달 닫기
       closeMappingModal();
     }
 
-    function updateMappingCellInTable(resultIndex, mappingType, code, name) {
+    function updateMappingCellInTable(resultIndex, mappingType, code, name, reasoning) {
       const row = document.querySelector(`tr[data-index="${resultIndex}"]`);
       if (!row) return;
 
       const cellIndex = mappingType === 'mct_ry_cd' ? 8 : 9;
       const cell = row.cells[cellIndex];
+      const reasoningBtn = reasoning
+        ? `<button class="reasoning-btn" data-reasoning="${escapeHtml(reasoning)}" onclick="event.stopPropagation();showReasoningFromBtn(event,this)" title="매핑사유">?</button>`
+        : '';
       if (cell) {
-        cell.innerHTML = `<div style="font-size: 0.8rem;">${escapeHtml(code)}<br><span style="color: var(--muted-foreground);">${escapeHtml(name)}</span></div>`;
+        cell.innerHTML = `<div class="mapping-cell-inner"><div style="font-size: 0.8rem;">${escapeHtml(code)}<br><span style="color: var(--muted-foreground);">${escapeHtml(name)}</span></div>${reasoningBtn}</div>`;
         cell.className = 'editable-cell';
         cell.onclick = () => openMappingModal(resultIndex, mappingType);
         cell.title = '클릭하여 편집';

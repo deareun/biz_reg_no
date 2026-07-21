@@ -14,6 +14,11 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { ChevronDown, Download } from 'lucide-react';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
 import { InquiryResult } from '@/lib/types';
 
 interface InquiryResultsTableProps {
@@ -262,11 +267,26 @@ export default function InquiryResultsTable({
                             {/* 카테고리 매핑 */}
                             {result.mapping && (
                               <div className="space-y-2">
-                                <h4 className="font-semibold text-sm">업종매핑 결과</h4>
+                                <div className="flex items-center gap-2">
+                                  <h4 className="font-semibold text-sm">업종매핑 결과</h4>
+                                  {(result.mapping.mct_ry_cd || result.mapping.hpsn_mct_zcd) && (
+                                    <Popover>
+                                      <PopoverTrigger asChild>
+                                        <button className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-muted-foreground/30 text-white text-xs font-bold hover:bg-muted-foreground/60 transition-colors" title="매핑사유">
+                                          ?
+                                        </button>
+                                      </PopoverTrigger>
+                                      <PopoverContent className="w-80 text-sm whitespace-pre-wrap" side="top">
+                                        <p className="font-semibold mb-1 text-xs text-muted-foreground">매핑사유</p>
+                                        <p>{result.mapping.reasoning || '사유 없음'}</p>
+                                      </PopoverContent>
+                                    </Popover>
+                                  )}
+                                </div>
                                 <div className="text-sm bg-indigo-50 p-3 rounded border border-indigo-200">
                                   {result.mapping.mct_ry_cd && (
                                     <p>
-                                      <span className="text-muted-foreground">가맹점원장:</span>
+                                      <span className="text-muted-foreground">가맹점업종기준:</span>
                                       <span className="ml-2 font-medium">
                                         {result.mapping.mct_ry_cd.code} - {result.mapping.mct_ry_cd.name}
                                       </span>
@@ -274,7 +294,7 @@ export default function InquiryResultsTable({
                                   )}
                                   {result.mapping.hpsn_mct_zcd && (
                                     <p>
-                                      <span className="text-muted-foreground">초개인화:</span>
+                                      <span className="text-muted-foreground">초개인화업종기준:</span>
                                       <span className="ml-2 font-medium">
                                         {result.mapping.hpsn_mct_zcd.code} - {result.mapping.hpsn_mct_zcd.name}
                                       </span>

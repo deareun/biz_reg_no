@@ -31,6 +31,7 @@ export interface InquiryResult {
   crawl: CrawlResult | null;
   ftc: FTCResult | null;
   mapping?: CategoryMapping;
+  mapping_error?: string;
 }
 
 // Bizno API 결과

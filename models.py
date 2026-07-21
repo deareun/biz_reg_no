@@ -23,6 +23,7 @@ class QueryHistory(db.Model):
     # LLM 매핑 결과 (JSON)
     mct_ry_cd_result = db.Column(db.JSON, nullable=True)
     hpsn_mct_zcd_result = db.Column(db.JSON, nullable=True)
+    mapping_reasoning = db.Column(db.Text, nullable=True)
 
     def to_dict(self):
         # 매핑 결과가 있으면만 mapping 필드 포함
@@ -46,6 +47,11 @@ class QueryHistory(db.Model):
             'crawl': self.crawl_result,
             'ftc': self.ftc_result,
         }
+
+        if self.mapping_reasoning is not None:
+            if mapping_data is None:
+                mapping_data = {}
+            mapping_data['reasoning'] = self.mapping_reasoning
 
         if mapping_data:
             result['mapping'] = mapping_data

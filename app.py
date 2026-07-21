@@ -14,7 +14,7 @@ from email.mime.application import MIMEApplication
 
 import requests
 from dotenv import load_dotenv
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, jsonify, request
 from flask_cors import CORS
 
 from bizno_scraper import crawl_bizno
@@ -54,6 +54,12 @@ with app.app_context():
                 conn.execute(sa.text(
                     "ALTER TABLE query_history ADD COLUMN hpsn_mct_zcd_result JSON"
                 ))
+
+        if 'mapping_reasoning' not in columns:
+            with db.engine.begin() as conn:
+                conn.execute(sa.text(
+                    "ALTER TABLE query_history ADD COLUMN mapping_reasoning TEXT"
+                ))
     except Exception as e:
         # 이미 존재하거나 다른 DB에서는 실패할 수 있으므로 무시
         pass
@@ -64,6 +70,11 @@ GOV_API_KEY_DECODED = os.getenv("gov_API_key_decoded", "")
 FTC_API_KEY = os.getenv("ftc_API_key", "")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3-flash-preview")
+NAVER_CLIENT_ID = os.getenv("NAVER_CLIENT_ID", "")
+NAVER_CLIENT_SECRET = os.getenv("NAVER_CLIENT_SECRET", "")
+
+# 1차 LLM 결과가 이 코드들이면 Naver 검색으로 추가 정보 수집 후 재매핑
+BROAD_MCT_CODES = {"261000", "214000", "444000", "781000", "442000", "451000", "452000"}
 
 BIZNO_URL = "https://bizno.net/api/fapi"
 GOV_URL = "https://apis.data.go.kr/1130000/MllBsDtl_3Service/getMllBsInfoDetail_3"
@@ -159,61 +170,37 @@ def format_date(date_str: str) -> str:
 
 
 def load_categories():
-    """category.txt에서 업종코드 로드"""
+    """mct_ry_cd.json / hpsn_mct_zcd.json에서 업종코드 로드"""
     categories = {
-        'mct_ry_cd': {},  # 가맹점원장 기준 - {코드: 업종명}
-        'hpsn_mct_zcd': {}        # 초개인화 기준 - {코드: 업종명}
+        'mct_ry_cd': {},
+        'hpsn_mct_zcd': {}
     }
 
+    base = os.path.dirname(__file__)
+
     try:
-        category_path = os.path.join(os.path.dirname(__file__), 'category.txt')
-        if not os.path.exists(category_path):
-            print(f"category.txt를 찾을 수 없습니다: {category_path}")
-            return categories
-
-        with open(category_path, 'r', encoding='utf-8') as f:
-            content = f.read()
-
-        # MCT_RY_CD 섹션과 HPSN 섹션 분리 ('--- ' 기준)
-        sections = content.split('--- ')
-
-        if len(sections) >= 2:
-            # MCT_RY_CD 섹션 (가맹점원장 기준)
-            mct_section = sections[1].strip().split('\n')
-            for line in mct_section[1:]:  # 첫 줄(헤더) 제외
-                line = line.strip()
-                if not line or line.startswith('MCT_RY_CD'):
-                    continue
-                # CSV 형식: 첫 번째 값은 코드, 두 번째 값은 업종명
-                parts = line.split(',')
-                if len(parts) >= 2:
-                    code = parts[0].strip()
-                    name = parts[1].strip()
-                    # '기타'로 시작하는 업종만 제외 (금융-기타 같은 경우는 포함)
-                    if code and code[0].isdigit() and not name.startswith('기타'):
-                        categories['mct_ry_cd'][code] = name
-
-            # HPSN 섹션 (초개인화 기준)
-            if len(sections) >= 3:
-                hpsn_mct_zcd_section = sections[2].strip().split('\n')
-                for line in hpsn_mct_zcd_section:
-                    line = line.strip()
-                    if not line or line.startswith('HPSN_') or line.startswith('초개인화'):
-                        continue
-                    # CSV 형식: 첫 번째 값은 코드, 여덟 번째 값은 업종명
-                    parts = line.split(',')
-                    if len(parts) >= 8:
-                        code = parts[0].strip()
-                        name = parts[7].strip()
-                        # '기타'로 시작하는 업종만 제외 (금융-기타 같은 경우는 포함)
-                        if code and code[0].isalpha() and not name.startswith('기타'):
-                            categories['hpsn_mct_zcd'][code] = name
-
-            print(f"카테고리 로딩 완료: MCT_RY_CD {len(categories['mct_ry_cd'])}개, HPSN {len(categories['hpsn_mct_zcd'])}개")
-
+        mct_path = os.path.join(base, 'mct_ry_cd.json')
+        with open(mct_path, 'r', encoding='utf-8') as f:
+            mct_data = json.load(f)
+        for code, info in mct_data.items():
+            name = info.get('mct_ry_nm', '')
+            if name and not name.startswith('기타'):
+                categories['mct_ry_cd'][code] = name
     except Exception as e:
-        print(f"카테고리 로딩 실패: {e}")
+        print(f"mct_ry_cd.json 로딩 실패: {e}")
 
+    try:
+        hpsn_path = os.path.join(base, 'hpsn_mct_zcd.json')
+        with open(hpsn_path, 'r', encoding='utf-8') as f:
+            hpsn_data = json.load(f)
+        for code, info in hpsn_data.items():
+            name = info.get('hpsn_mct_zcd_nm', '')
+            if name and not name.startswith('기타'):
+                categories['hpsn_mct_zcd'][code] = name
+    except Exception as e:
+        print(f"hpsn_mct_zcd.json 로딩 실패: {e}")
+
+    print(f"카테고리 로딩 완료: MCT_RY_CD {len(categories['mct_ry_cd'])}개, HPSN {len(categories['hpsn_mct_zcd'])}개")
     return categories
 
 
@@ -439,111 +426,236 @@ def extract_company_name(bizno_result, crawl_result, gov_result) -> str:
     return ""
 
 
-def perform_category_mapping(brno: str, company_name: str, bizno_result: dict, crawl_result: dict,
-                            gov_result: dict, ftc_result: dict) -> dict:
-    """Gemini API를 사용하여 업종 매핑 수행"""
-    if not company_name or not GEMINI_API_KEY or not genai:
-        return {}
-
+def search_naver_business(company_name: str) -> str:
+    """Naver 검색 API로 사업체 추가 정보 수집"""
+    if not NAVER_CLIENT_ID or not NAVER_CLIENT_SECRET:
+        return ""
     try:
-        genai.configure(api_key=GEMINI_API_KEY)
-        model = genai.GenerativeModel(GEMINI_MODEL)
+        # 로컬 검색 (업체 정보)
+        local_res = requests.get(
+            "https://openapi.naver.com/v1/search/local.json",
+            params={"query": company_name, "display": 3},
+            headers={
+                "X-Naver-Client-Id": NAVER_CLIENT_ID,
+                "X-Naver-Client-Secret": NAVER_CLIENT_SECRET,
+            },
+            timeout=10,
+        )
+        local_items = []
+        if local_res.ok:
+            for item in local_res.json().get("items", []):
+                title = re.sub(r"<[^>]+>", "", item.get("title", ""))
+                category = item.get("category", "")
+                addr = item.get("roadAddress") or item.get("address", "")
+                local_items.append(f"{title} / 업종:{category} / 주소:{addr}")
 
-        # 데이터 추출
-        crawl_info = crawl_result.get('search', {}) if crawl_result else {}
-        crawl_detail = crawl_result.get('detail', {}) if crawl_result else {}
-        industry_category = crawl_detail.get('국세청산업분류', {}) if isinstance(crawl_detail.get('국세청산업분류'), dict) else {}
+        # 웹 검색 (추가 맥락)
+        web_res = requests.get(
+            "https://openapi.naver.com/v1/search/webkr.json",
+            params={"query": f"{company_name} 사업 서비스", "display": 3},
+            headers={
+                "X-Naver-Client-Id": NAVER_CLIENT_ID,
+                "X-Naver-Client-Secret": NAVER_CLIENT_SECRET,
+            },
+            timeout=10,
+        )
+        web_snippets = []
+        if web_res.ok:
+            for item in web_res.json().get("items", []):
+                desc = re.sub(r"<[^>]+>", "", item.get("description", ""))
+                if desc:
+                    web_snippets.append(desc[:120])
 
-        gov_items = gov_result.get('items', []) if gov_result else []
-        gov_info = gov_items[0] if gov_items else {}
+        parts = []
+        if local_items:
+            parts.append("【네이버 업체검색】\n" + "\n".join(local_items))
+        if web_snippets:
+            parts.append("【네이버 웹검색 요약】\n" + "\n".join(web_snippets))
+        return "\n\n".join(parts)
+    except Exception as e:
+        print(f"Naver 검색 실패: {e}")
+        return ""
 
-        ftc_items = ftc_result.get('브랜드', []) if ftc_result else []
-        ftc_info = ftc_items[0] if ftc_items else {}
 
-        # 테이블 형태의 데이터 구성
-        table_data = f"""사업자번호|상호명|국세청산업분류_대분류|중분류|소분류|세분류|세세분류|통신판매업_판매물품|가맹사업_산업대분류|중분류|소분류|주요상품값
-{brno}|{company_name}|{industry_category.get('대분류', '')}|{industry_category.get('중분류', '')}|{industry_category.get('소분류', '')}|{industry_category.get('세분류', '')}|{industry_category.get('세세분류', '')}|{gov_info.get('판매물품', '')}|{ftc_info.get('산업대분류', '')}|{ftc_info.get('산업중분류', '')}|{ftc_info.get('주요상품', '')}|"""
+def _build_mapping_prompt(table_data: str, extra_context: str = "") -> str:
+    mct_codes = ', '.join([f'{code}({name})' for code, name in CATEGORIES['mct_ry_cd'].items()])
+    hpsn_codes = ', '.join([f'{code}({name})' for code, name in CATEGORIES['hpsn_mct_zcd'].items()])
 
-        # Category 데이터를 프롬프트에 포함
-        mct_ry_cd_list = '\n'.join([f"  {code}: {name}" for code, name in CATEGORIES['mct_ry_cd'].items()])
-        hpsn_mct_zcd_list = '\n'.join([f"  {code}: {name}" for code, name in CATEGORIES['hpsn_mct_zcd'].items()])
+    if extra_context:
+        # 2차 매핑: Naver 검색으로 실제 취급 품목이 확인된 경우
+        priority_block = """**판단 우선순위 (Naver 추가검색 결과 있음)**:
+1. 아래 [추가 검색 정보]에서 확인된 실제 취급 품목/서비스 — 최우선 반영
+2. 통신판매 판매물품, 가맹사업 주요상품
+3. 국세청산업분류 소분류/세분류
+4. 업태/종목 — '전자상거래', '도매및소매' 등 유통 방식에 해당하면 실제 품목이 확인된 경우 무시
+5. 상호명은 마지막 수단으로만 참고 (상호명만으로 업종 추론 금지)
 
-        prompt = f"""다음 사업 정보를 분석하여 최적의 가맹점업종 코드를 매핑하세요.
+**핵심 원칙**: '전자상거래', '무점포소매', '도매및소매' 등은 판매 방식이지 업종이 아님. 실제 취급 품목(캔들, 의류, 식품 등)이 확인되면 그 품목의 업종으로 매핑하세요."""
+        context_block = f"\n[추가 검색 정보 — 실제 취급 품목/서비스 파악에 활용하세요]\n{extra_context}\n"
+    else:
+        # 1차 매핑: 사업자 등록 정보 기반
+        priority_block = """**판단 우선순위 (사업자 등록 정보 기반)**:
+1. 통신판매 판매물품, 가맹사업 주요상품 — 실제 취급 품목이 명시된 경우 최우선
+2. 업태/종목 — 사업자등록증 기재 정보. 단, '전자상거래', '무점포소매', '도매및소매'처럼 유통 방식만 나타내는 경우 3번 이하 정보와 함께 종합 판단
+3. 국세청산업분류 소분류/세분류 — 구체적 업종 확인
+4. 상호명은 마지막 수단으로만 참고 (상호명만으로 업종 추론 금지)"""
+        context_block = ""
+
+    return f"""다음 사업 정보를 분석하여 최적의 가맹점업종 코드를 매핑하세요.
 무조건 1개씩 선택해야 합니다. NULL값이나 빈 값은 허용되지 않습니다.
 
 [사업 정보]
 {table_data}
-
+{context_block}
 [가맹점업종기준 코드 (mct_ry_cd) - 전체 {len(CATEGORIES['mct_ry_cd'])}개]
-{', '.join([f'{code}({name})' for code, name in CATEGORIES['mct_ry_cd'].items()])}
+{mct_codes}
 
 [초개인화업종기준 코드 (hpsn_mct_zcd) - 전체 {len(CATEGORIES['hpsn_mct_zcd'])}개]
-{', '.join([f'{code}({name})' for code, name in CATEGORIES['hpsn_mct_zcd'].items()])}
+{hpsn_codes}
 
-위의 사업 정보를 바탕으로 category.txt의 코드를 참고하여 최적의 업종을 매핑하세요.
-국세청 산업분류, 가맹사업 정보, 통신판매 물품 등을 종합적으로 고려하세요.
+위의 사업 정보를 바탕으로 최적의 업종을 매핑하세요.
+
+{priority_block}
 
 **중요**: 반드시 아래 규칙을 따르세요:
 1. mct_ry_cd와 hpsn_mct_zcd 모두 정확히 1개씩만 선택하세요
 2. 완전히 확실하지 않으면 가장 가능성 높은 것을 선택하세요
 3. null, 빈 값, 미지정은 허용되지 않습니다
-4. 선택할 수 없으면 기본값으로 일반적인 업종을 선택하세요
+4. 선택할 수 없으면 일반적인 업종을 선택하세요
 
 응답 형식 (JSON):
 {{
   "mct_ry_cd": {{"code": "CODE", "name": "업종명"}},
   "hpsn_mct_zcd": {{"code": "CODE", "name": "업종명"}},
-  "reasoning": "매핑 이유"
+  "reasoning": "매핑 이유 (추가 검색 정보를 활용한 경우 그 근거 포함)"
 }}
 
 주의:
 - 반드시 위의 코드 목록에서만 선택하세요
-- code는 숫자만 입력하세요
-- name도 정확히 입력하세요
+- code는 숫자 또는 영문+숫자 형식 그대로 입력하세요
 - JSON 형식을 정확히 지키세요"""
 
+
+def _parse_llm_json(result_text: str) -> dict:
+    if "```json" in result_text:
+        result_text = result_text.split("```json")[1].split("```")[0].strip()
+    elif "```" in result_text:
+        result_text = result_text.split("```")[1].split("```")[0].strip()
+    return json.loads(result_text)
+
+
+def _validate_mapping(mapping_result: dict) -> dict:
+    if mapping_result.get('mct_ry_cd'):
+        code = mapping_result['mct_ry_cd'].get('code')
+        if code and code not in CATEGORIES['mct_ry_cd']:
+            print(f"경고: mct_ry_cd 코드 {code}가 카테고리에 없음")
+            mapping_result['mct_ry_cd']['name'] = CATEGORIES['mct_ry_cd'].get(code, mapping_result['mct_ry_cd'].get('name', ''))
+    if mapping_result.get('hpsn_mct_zcd'):
+        code = mapping_result['hpsn_mct_zcd'].get('code')
+        if code and code not in CATEGORIES['hpsn_mct_zcd']:
+            print(f"경고: hpsn_mct_zcd 코드 {code}가 카테고리에 없음")
+            mapping_result['hpsn_mct_zcd']['name'] = CATEGORIES['hpsn_mct_zcd'].get(code, mapping_result['hpsn_mct_zcd'].get('name', ''))
+    return mapping_result
+
+
+def get_mapping_diagnostics() -> dict:
+    """업종매핑 설정 상태 진단 (배포 환경 문제 파악용)"""
+    return {
+        "gemini_configured": bool(GEMINI_API_KEY),
+        "genai_available": genai is not None,
+        "gemini_model": GEMINI_MODEL,
+        "categories": {
+            "mct_ry_cd": len(CATEGORIES.get("mct_ry_cd", {})),
+            "hpsn_mct_zcd": len(CATEGORIES.get("hpsn_mct_zcd", {})),
+        },
+    }
+
+
+def _mapping_precheck_error() -> str | None:
+    if not GEMINI_API_KEY:
+        return "백엔드 GEMINI_API_KEY가 설정되지 않았습니다. Vercel이 아닌 Flask 서버 환경변수에 설정하세요."
+    if not genai:
+        return "google-generativeai 패키지가 설치되지 않았습니다."
+    if not CATEGORIES.get("mct_ry_cd"):
+        return "가맹점업종 코드(mct_ry_cd.json)가 서버에 없거나 로드되지 않았습니다."
+    if not CATEGORIES.get("hpsn_mct_zcd"):
+        return "초개인화업종 코드(hpsn_mct_zcd.json)가 서버에 없거나 로드되지 않았습니다."
+    return None
+
+
+def perform_category_mapping(brno: str, company_name: str, bizno_result: dict, crawl_result: dict,
+                             gov_result: dict, ftc_result: dict) -> tuple[dict, str | None]:
+    """Gemini API를 사용하여 업종 매핑 수행. 광범위 업종이면 Naver 검색 후 재매핑."""
+    if not company_name:
+        return {}, "상호명을 찾을 수 없어 업종매핑을 수행할 수 없습니다."
+
+    precheck_error = _mapping_precheck_error()
+    if precheck_error:
+        return {}, precheck_error
+
+    try:
+        genai.configure(api_key=GEMINI_API_KEY)
+        model = genai.GenerativeModel(GEMINI_MODEL)
+
+        crawl_detail = crawl_result.get('detail', {}) if crawl_result else {}
+        industry_category = crawl_detail.get('국세청산업분류', {}) if isinstance(crawl_detail.get('국세청산업분류'), dict) else {}
+        biz_type = crawl_detail.get('업태', '')
+        biz_item = crawl_detail.get('종목', '')
+        gov_items = gov_result.get('items', []) if gov_result else []
+        gov_info = gov_items[0] if gov_items else {}
+        ftc_items = ftc_result.get('브랜드', []) if ftc_result else []
+        ftc_info = ftc_items[0] if ftc_items else {}
+
+        table_data = (
+            f"사업자번호|상호명|업태|종목|국세청산업분류_대분류|중분류|소분류|세분류|세세분류|"
+            f"통신판매업_판매물품|가맹사업_산업대분류|중분류|소분류|주요상품값\n"
+            f"{brno}|{company_name}"
+            f"|{biz_type}|{biz_item}"
+            f"|{industry_category.get('대분류', '')}|{industry_category.get('중분류', '')}"
+            f"|{industry_category.get('소분류', '')}|{industry_category.get('세분류', '')}"
+            f"|{industry_category.get('세세분류', '')}|{gov_info.get('판매물품', '')}"
+            f"|{ftc_info.get('산업대분류', '')}|{ftc_info.get('산업중분류', '')}"
+            f"|{ftc_info.get('주요상품', '')}|"
+        )
+
+        # 1차 매핑
+        prompt = _build_mapping_prompt(table_data)
+        print(f"[매핑 1차] {brno} - {company_name}")
         response = model.generate_content(prompt)
-        result_text = response.text.strip()
+        mapping_result = _validate_mapping(_parse_llm_json(response.text.strip()))
+        print(f"[매핑 1차 결과] {mapping_result}")
 
-        print(f"[매핑] {brno} - {company_name}")
-        print(f"[prompt] : {prompt}")
-        print(f"LLM 응답: {result_text[:200]}...")
+        # 광범위 업종이면 Naver 검색 후 2차 매핑
+        mct_code = mapping_result.get('mct_ry_cd', {}).get('code', '')
+        if mct_code in BROAD_MCT_CODES:
+            print(f"[매핑] 광범위 업종({mct_code}) 감지 → Naver 검색으로 재매핑 시도")
+            naver_context = search_naver_business(company_name)
+            if naver_context:
+                prompt2 = _build_mapping_prompt(table_data, extra_context=naver_context)
+                response2 = model.generate_content(prompt2)
+                mapping_result2 = _validate_mapping(_parse_llm_json(response2.text.strip()))
+                reasoning2 = mapping_result2.get('reasoning', '')
+                mapping_result2['reasoning'] = f"[Naver 추가검색 후 재매핑] {reasoning2}"
+                print(f"[매핑 2차 결과] {mapping_result2}")
+                mapping_result = mapping_result2
+            else:
+                print("[매핑] Naver 검색 결과 없음, 1차 결과 유지")
 
-        # JSON 추출 시도
-        try:
-            # ```json ... ``` 형식이 있으면 제거
-            if "```json" in result_text:
-                result_text = result_text.split("```json")[1].split("```")[0].strip()
-            elif "```" in result_text:
-                result_text = result_text.split("```")[1].split("```")[0].strip()
+        if not mapping_result.get("hpsn_mct_zcd"):
+            return mapping_result, "LLM이 초개인화업종(hpsn_mct_zcd) 결과를 반환하지 않았습니다."
+        if not mapping_result.get("mct_ry_cd"):
+            return mapping_result, "LLM이 가맹점업종(mct_ry_cd) 결과를 반환하지 않았습니다."
 
-            mapping_result = json.loads(result_text)
+        return mapping_result, None
 
-            # 결과 검증
-            if mapping_result.get('mct_ry_cd'):
-                mct_code = mapping_result['mct_ry_cd'].get('code')
-                if mct_code and mct_code not in CATEGORIES['mct_ry_cd']:
-                    print(f"경고: mct_ry_cd 코드 {mct_code}가 카테고리에 없음")
-                    mapping_result['mct_ry_cd']['name'] = CATEGORIES['mct_ry_cd'].get(mct_code, mapping_result['mct_ry_cd'].get('name'))
-
-            if mapping_result.get('hpsn_mct_zcd'):
-                hpsn_code = mapping_result['hpsn_mct_zcd'].get('code')
-                if hpsn_code and hpsn_code not in CATEGORIES['hpsn_mct_zcd']:
-                    print(f"경고: hpsn_mct_zcd 코드 {hpsn_code}가 카테고리에 없음")
-                    mapping_result['hpsn_mct_zcd']['name'] = CATEGORIES['hpsn_mct_zcd'].get(hpsn_code, mapping_result['hpsn_mct_zcd'].get('name'))
-
-            print(f"매핑 결과: {mapping_result}")
-            return mapping_result
-        except json.JSONDecodeError as e:
-            print(f"JSON 파싱 실패: {result_text}")
-            print(f"파싱 에러: {e}")
-            return {}
-
+    except json.JSONDecodeError as e:
+        print(f"JSON 파싱 실패: {e}")
+        return {}, f"LLM 응답 JSON 파싱 실패: {e}"
     except Exception as e:
         print(f"업종매핑 실패: {e}")
         import traceback
         traceback.print_exc()
-        return {}
+        return {}, f"업종매핑 실패: {e}"
 
 
 
@@ -603,9 +715,11 @@ def lookup_one(brno: str, perform_mapping: bool = False) -> dict:
 
     # 업종매핑 수행 (필요한 경우)
     mapping = None
-    if perform_mapping and company_name:
-        mapping = perform_category_mapping(brno, company_name, bizno_result, crawl_result,
-                                          gov_result, ftc_result)
+    mapping_error = None
+    if perform_mapping:
+        mapping, mapping_error = perform_category_mapping(
+            brno, company_name, bizno_result, crawl_result, gov_result, ftc_result
+        )
 
         # 매핑 결과를 DB에 저장 (캐시 여부 상관없이 항상 저장)
         if mapping:
@@ -614,6 +728,7 @@ def lookup_one(brno: str, perform_mapping: bool = False) -> dict:
                 if history:
                     history.mct_ry_cd_result = mapping.get('mct_ry_cd')
                     history.hpsn_mct_zcd_result = mapping.get('hpsn_mct_zcd')
+                    history.mapping_reasoning = mapping.get('reasoning', '')
                     db.session.commit()
                     print(f"매핑 결과 저장 완료: {brno} (캐시여부: {is_cached})")
             except Exception as e:
@@ -636,18 +751,12 @@ def lookup_one(brno: str, perform_mapping: bool = False) -> dict:
 
     if mapping:
         result["mapping"] = mapping
+    if mapping_error:
+        result["mapping_error"] = mapping_error
 
     return result
 
 
-@app.route("/")
-def index():
-    return render_template("index.html")
-
-
-@app.route("/history")
-def history():
-    return render_template("history.html")
 
 
 
@@ -808,6 +917,28 @@ def lookup_stream():
     return Response(stream_with_context(generate()), content_type='text/event-stream', headers=sse_headers)
 
 
+@app.get("/api/health")
+def health():
+    """배포 환경 진단용 헬스체크"""
+    diagnostics = get_mapping_diagnostics()
+    issues = []
+    if not diagnostics["gemini_configured"]:
+        issues.append("GEMINI_API_KEY 미설정 (Flask 백엔드 환경변수)")
+    if not diagnostics["genai_available"]:
+        issues.append("google-generativeai 미설치")
+    if diagnostics["categories"]["mct_ry_cd"] == 0:
+        issues.append("mct_ry_cd.json 미로드")
+    if diagnostics["categories"]["hpsn_mct_zcd"] == 0:
+        issues.append("hpsn_mct_zcd.json 미로드")
+
+    return jsonify({
+        "success": True,
+        "ready_for_mapping": len(issues) == 0,
+        "issues": issues,
+        **diagnostics,
+    })
+
+
 @app.get("/api/categories")
 def get_categories():
     """업종 카테고리 데이터 조회"""
@@ -834,11 +965,13 @@ def update_mapping():
         if not record:
             return jsonify({"success": False, "error": "기록을 찾을 수 없습니다."}), 404
 
-        # 매핑 결과 업데이트
+        # 매핑 결과 업데이트 (수동 수정 시 reasoning을 사용자 수기입력건으로 변경)
         if mct_ry_cd:
             record.mct_ry_cd_result = mct_ry_cd
         if hpsn_mct_zcd:
             record.hpsn_mct_zcd_result = hpsn_mct_zcd
+        if mct_ry_cd or hpsn_mct_zcd:
+            record.mapping_reasoning = "[사용자 수기입력건]"
 
         db.session.commit()
         return jsonify({

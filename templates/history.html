@@ -542,6 +542,47 @@
       background: var(--muted);
     }
 
+    .mapping-cell-inner {
+      display: flex;
+      align-items: flex-start;
+      gap: 4px;
+    }
+
+    .reasoning-btn {
+      flex-shrink: 0;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: var(--muted-foreground);
+      color: #fff;
+      font-size: 10px;
+      font-weight: 700;
+      line-height: 16px;
+      text-align: center;
+      cursor: pointer;
+      border: none;
+      padding: 0;
+      margin-top: 2px;
+      opacity: 0.65;
+      transition: opacity 0.15s;
+    }
+    .reasoning-btn:hover { opacity: 1; }
+
+    .reasoning-popup {
+      position: fixed;
+      z-index: 9999;
+      background: #1e1e2e;
+      color: #e2e8f0;
+      border-radius: 8px;
+      padding: 12px 14px;
+      font-size: 0.78rem;
+      line-height: 1.55;
+      max-width: 320px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+      pointer-events: none;
+      white-space: pre-wrap;
+    }
+
     .modal-overlay {
       position: fixed;
       top: 0;
@@ -1704,6 +1745,9 @@
     </div>
   </div>
 
+  <!-- 매핑사유 팝업 -->
+  <div id="reasoningPopup" class="reasoning-popup" style="display:none;"></div>
+
   <!-- 업종 매핑 수정 모달 -->
   <div id="mappingModal" class="modal-overlay">
     <div class="combobox-modal">
@@ -1985,15 +2029,22 @@
       const govResult = getStatusDot(api.gov?.success, api.gov?.found);
       const ftcResult = getStatusDot(ftc?.success, ftc?.found);
 
-      // 매핑 결과 렌더링 (조회하기와 동일한 형식)
+      // 매핑 결과 렌더링
+      const reasoning = mapping.reasoning || '';
+      const hasMappingData = !!(mapping.mct_ry_cd || mapping.hpsn_mct_zcd);
+      const reasoningText = reasoning || (hasMappingData ? '사유 없음' : '');
+      const reasoningBtn = reasoningText
+        ? `<button class="reasoning-btn" data-reasoning="${escapeHtml(reasoningText)}" onclick="event.stopPropagation();showReasoningFromBtn(event,this)" title="매핑사유">?</button>`
+        : '';
+
       let mctDisplay = '<span style="color: var(--muted-foreground);">없음</span>';
       if (mapping.mct_ry_cd && typeof mapping.mct_ry_cd === 'object' && mapping.mct_ry_cd.code) {
-        mctDisplay = `<div style="font-size: 0.8rem;">${escapeHtml(mapping.mct_ry_cd.code)}<br><span style="color: var(--muted-foreground);">${escapeHtml(mapping.mct_ry_cd.name)}</span></div>`;
+        mctDisplay = `<div class="mapping-cell-inner"><div style="font-size: 0.8rem;">${escapeHtml(mapping.mct_ry_cd.code)}<br><span style="color: var(--muted-foreground);">${escapeHtml(mapping.mct_ry_cd.name)}</span></div>${reasoningBtn}</div>`;
       }
 
       let hpsn_mct_zcdDisplay = '<span style="color: var(--muted-foreground);">없음</span>';
       if (mapping.hpsn_mct_zcd && typeof mapping.hpsn_mct_zcd === 'object' && mapping.hpsn_mct_zcd.code) {
-        hpsn_mct_zcdDisplay = `<div style="font-size: 0.8rem;">${escapeHtml(mapping.hpsn_mct_zcd.code)}<br><span style="color: var(--muted-foreground);">${escapeHtml(mapping.hpsn_mct_zcd.name)}</span></div>`;
+        hpsn_mct_zcdDisplay = `<div class="mapping-cell-inner"><div style="font-size: 0.8rem;">${escapeHtml(mapping.hpsn_mct_zcd.code)}<br><span style="color: var(--muted-foreground);">${escapeHtml(mapping.hpsn_mct_zcd.name)}</span></div></div>`;
       }
 
       // 저장 버튼 표시 여부 (수정된 record만)
@@ -2139,6 +2190,28 @@
       searchInput.removeEventListener("input", filterMappingListHandler);
     }
 
+    // ── 매핑사유 팝업 ──
+    function showReasoningFromBtn(event, btn) {
+      const text = btn.getAttribute('data-reasoning') || '사유 없음';
+      showReasoningPopup(event, text);
+    }
+
+    function showReasoningPopup(event, text) {
+      const popup = document.getElementById('reasoningPopup');
+      popup.textContent = text;
+      popup.style.display = 'block';
+      const x = Math.min(event.clientX + 12, window.innerWidth - 340);
+      const y = Math.min(event.clientY + 12, window.innerHeight - 160);
+      popup.style.left = x + 'px';
+      popup.style.top  = y + 'px';
+      document.addEventListener('click', hideReasoningPopup, { once: true });
+    }
+
+    function hideReasoningPopup() {
+      const popup = document.getElementById('reasoningPopup');
+      if (popup) popup.style.display = 'none';
+    }
+
     function filterMappingListHandler(e) {
       filterMappingList(e.target.value);
     }
@@ -2214,14 +2287,16 @@
           if (record) {
             if (!record.mapping) record.mapping = {};
             record.mapping[currentMappingType] = { code, name };
+            record.mapping.reasoning = '[사용자 수기입력건]';
 
             // 테이블 셀 업데이트
             const row = document.querySelector(`tr[data-id="${recordId}"]`);
             if (row) {
               const cellIndex = currentMappingType === 'mct_ry_cd' ? 8 : 9;
               const cell = row.cells[cellIndex];
+              const rBtn = `<button class="reasoning-btn" data-reasoning="[사용자 수기입력건]" onclick="event.stopPropagation();showReasoningFromBtn(event,this)" title="매핑사유">?</button>`;
               if (cell) {
-                cell.innerHTML = `<div style="font-size: 0.8rem;">${escapeHtml(code)}<br><span style="color: var(--muted-foreground);">${escapeHtml(name)}</span></div>`;
+                cell.innerHTML = `<div class="mapping-cell-inner"><div style="font-size: 0.8rem;">${escapeHtml(code)}<br><span style="color: var(--muted-foreground);">${escapeHtml(name)}</span></div>${rBtn}</div>`;
               }
             }
           }

@@ -17,6 +17,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover'
 import { Label } from '@/components/ui/label'
 import {
   Download,
@@ -25,6 +30,7 @@ import {
   Search,
   Edit2,
   ArrowUp,
+  HelpCircle,
 } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { inquiryAPI, categoryAPI, errorHandler } from '@/lib/api'
@@ -239,8 +245,33 @@ export default function InquiryPage() {
               (a, b) => numbers.indexOf(a.brno) - numbers.indexOf(b.brno)
             )
             setAllResults(sorted)
-            setStatusMessage(`${sorted.length}건 조회 완료 ✓`)
-            toast({ title: '조회 완료', description: `${sorted.length}개 사업자 정보를 조회했습니다.` })
+
+            const mappingErrors = performCategoryMapping
+              ? sorted.filter(r => r.mapping_error).map(r => `${r.brno_formatted}: ${r.mapping_error}`)
+              : []
+            const mappingMissing = performCategoryMapping
+              ? sorted.filter(r => !r.mapping?.hpsn_mct_zcd?.code && !r.mapping_error)
+              : []
+
+            if (mappingErrors.length > 0) {
+              setStatusMessage(`${sorted.length}건 조회 완료 (업종매핑 ${mappingErrors.length}건 실패)`)
+              setError(mappingErrors[0])
+              toast({
+                title: '업종매핑 실패',
+                description: mappingErrors.slice(0, 2).join('\n'),
+                variant: 'destructive',
+              })
+            } else if (mappingMissing.length > 0) {
+              setStatusMessage(`${sorted.length}건 조회 완료 (초개인화업종 미매핑 ${mappingMissing.length}건)`)
+              toast({
+                title: '업종매핑 미완료',
+                description: '초개인화업종 결과가 없습니다. 백엔드 /api/health 를 확인하세요.',
+                variant: 'destructive',
+              })
+            } else {
+              setStatusMessage(`${sorted.length}건 조회 완료 ✓`)
+              toast({ title: '조회 완료', description: `${sorted.length}개 사업자 정보를 조회했습니다.` })
+            }
           }
         }
       }
@@ -811,17 +842,34 @@ export default function InquiryPage() {
                                 <Edit2 style={{ width: 10, height: 10, color: '#8b8b94', flexShrink: 0, marginTop: 3 }} />
                                 {hpsnMapping?.code
                                   ? <div style={{ fontSize: '0.8rem' }}>{hpsnMapping.code}<br /><span style={{ color: '#8b8b94' }}>{hpsnMapping.name}</span></div>
-                                  : <span style={{ color: '#8b8b94', fontSize: '0.8rem' }}>없음</span>
+                                  : result.mapping_error
+                                    ? <span style={{ color: '#dc2626', fontSize: '0.75rem' }} title={result.mapping_error}>실패</span>
+                                    : <span style={{ color: '#8b8b94', fontSize: '0.8rem' }}>없음</span>
                                 }
                               </div>
                             </td>
                           </>
                         )}
                         <td style={{ ...iqTdStyle, textAlign: 'center' }}>
-                          <button onClick={() => toggleExpand(result.brno)}
-                            style={{ background: 'transparent', color: '#8b8b94', border: '1px solid #ebe9f1', width: 28, height: 28, borderRadius: 6, cursor: 'pointer', fontSize: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: 'auto' }}>
-                            {isExp ? '▲' : '▼'}
-                          </button>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+                            {(mctMapping?.code || hpsnMapping?.code) && (
+                              <Popover>
+                                <PopoverTrigger asChild>
+                                  <button onClick={e => e.stopPropagation()} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center' }} title="매핑사유">
+                                    <HelpCircle style={{ width: 16, height: 16, color: '#c4c4c4' }} />
+                                  </button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-80 text-sm whitespace-pre-wrap" side="top">
+                                  <p style={{ fontWeight: 600, fontSize: '0.75rem', color: '#8b8b94', marginBottom: 4 }}>매핑사유</p>
+                                  <p>{result.mapping?.reasoning || '사유 없음'}</p>
+                                </PopoverContent>
+                              </Popover>
+                            )}
+                            <button onClick={() => toggleExpand(result.brno)}
+                              style={{ background: 'transparent', color: '#8b8b94', border: '1px solid #ebe9f1', width: 28, height: 28, borderRadius: 6, cursor: 'pointer', fontSize: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                              {isExp ? '▲' : '▼'}
+                            </button>
+                          </div>
                         </td>
                       </tr>
                       {isExp && (
